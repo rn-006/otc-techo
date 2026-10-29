@@ -311,15 +311,22 @@ function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeou
 /* ---------- data ---------- */
 async function boot(){
   db=localDB;
-  db.collection("products").onSnapshot(s=>{S.products=s.docs.map(d=>({id:d.id,...d.data()}));S.loaded=true;render();refreshSheet()});
-  db.collection("ingredients").onSnapshot(s=>{S.ings=s.docs.map(d=>({id:d.id,...d.data()}));render();refreshSheet()});
+  db.collection("products").onSnapshot(s=>{S.products=s.docs.map(d=>({id:d.id,...d.data()}));IX=null;S.loaded=true;render();refreshSheet()});
+  db.collection("ingredients").onSnapshot(s=>{S.ings=s.docs.map(d=>({id:d.id,...d.data()}));IX=null;render();refreshSheet()});
   db.collection("sales").onSnapshot(s=>{S.sales=s.docs.map(d=>({id:d.id,...d.data()}));renderSales();refreshSheet()});
   db.collection("quiz").onSnapshot(s=>{S.quiz=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));if(S.tab==="learn"&&S.learn==="quiz"&&!S.qz)renderLearn()});
 }
 async function saveProduct(p){const {id,...data}=p;data.updatedAt=now();if(id){await db.doc("products/"+id).set(data);return id}data.createdAt=now();const ref=await db.collection("products").add(data);return ref.id}
 async function saveIng(i){const id=i.id||hash(i.name);const {id:_,...data}=i;data.updatedAt=now();await db.doc("ingredients/"+id).set(data);return id}
-const ingByName=n=>S.ings.find(i=>norm(i.name)===norm(n)||(i.aliases||[]).some(a=>norm(a)===norm(n)));
-const productsWith=n=>S.products.filter(p=>(p.ingredients||[]).some(x=>norm(x.name)===norm(n)||(ingByName(x.name)&&ingByName(x.name)===ingByName(n))));
+let IX=null;
+function ix(){if(IX)return IX;const byName=new Map();
+  for(const i of S.ings){const k=norm(i.name);if(!byName.has(k))byName.set(k,i)}
+  for(const i of S.ings)for(const a of i.aliases||[]){const k=norm(a);if(k&&!byName.has(k))byName.set(k,i)}
+  const prodBy=new Map();
+  for(const p of S.products)for(const x of p.ingredients||[]){const k=byName.get(norm(x.name))?.id||"n:"+norm(x.name);if(!prodBy.has(k))prodBy.set(k,new Set());prodBy.get(k).add(p)}
+  return IX={byName,prodBy}}
+const ingByName=n=>ix().byName.get(norm(n));
+const productsWith=n=>{const i=ingByName(n);return[...(ix().prodBy.get(i?i.id:"n:"+norm(n))||[])]};
 
 /* ---------- list views ---------- */
 function hay(p){return norm([p.name,p.maker,p.category,p.risk,(p.tags||[]).join(" "),(p.ingredients||[]).map(i=>i.name+" "+(i.role||"")).join(" "),lines(p.effects).join(" "),RX_GROUPS.map(([k])=>(p.restrictions?.[k]||[]).map(x=>x.text).join(" ")).join(" "),(p.checkPoints||[]).join(" "),lines(p.sideEffects?.map?.(s=>s.symptom)||[]).join(" "),p.memo].join(" "))}
@@ -486,6 +493,7 @@ const split=s=>s.split(/[、,，]/).map(x=>x.trim()).filter(Boolean);
 sheet.addEventListener("click",async e=>{
   const g=e.target.closest("[data-goi]");if(g){const i=ingByName(g.dataset.goi);if(i)openIng(i.id);else toast("成分辞典にまだありません");return}
   const gt=e.target.closest("[data-goto]");if(gt){openProduct(gt.dataset.goto);return}
+  const sv=e.target.closest("[data-sv]");if(sv){const key=sv.dataset.sv.split("|")[0],on=sv.getAttribute("aria-pressed")==="true";sheet.querySelectorAll(`[data-sv^="${key}|"]`).forEach(x=>x.setAttribute("aria-pressed","false"));if(!on)sv.setAttribute("aria-pressed","true");return}
   const es=e.target.closest("[data-esale]");if(es){editSale(es.dataset.esale,null,current?.id);return}
   const pv=e.target.closest("[data-phv]");if(pv){viewPhoto(current.id,+pv.dataset.phv);return}
   const px=e.target.closest("[data-phx]");if(px){if(!px.dataset.c){px.dataset.c=1;px.textContent="?";toast("もう一度押すと写真を外します");setTimeout(()=>{if(px.isConnected){delete px.dataset.c;px.textContent="×"}},3000);return}rmPhoto(current.id,+px.dataset.phx);return}
@@ -502,7 +510,7 @@ sheet.addEventListener("click",async e=>{
     const nm=v("sname");if(!nm){toast("商品名を入れてください");return}
     const p=S.products.find(x=>norm(x.name)===norm(nm));
     const old=id?S.sales.find(x=>x.id===id):null;
-    const data={date:v("date")||ymd(new Date()),name:p?.name||nm,pid:p?.id||"",category:p?.category||"",qty:Math.max(1,parseInt(v("qty"),10)||1),amount:Math.max(0,parseInt(v("amount"),10)||0),consult:v("consult"),memo:v("smemo"),createdAt:old?.createdAt||now(),updatedAt:now()};
+    const data={date:v("date")||ymd(new Date()),name:p?.name||nm,pid:p?.id||"",category:p?.category||"",qty:Math.max(1,parseInt(v("qty"),10)||1),amount:Math.max(0,parseInt(v("amount"),10)||0),consult:v("consult"),memo:v("smemo"),buy:svGet("buy"),age:svGet("age"),sex:svGet("sex"),createdAt:old?.createdAt||now(),updatedAt:now()};
     b.disabled=true;
     if(id)await db.doc("sales/"+id).set(data);else await db.collection("sales").add(data);
     const back=current.from;toast("記録しました");closeSheet();
@@ -547,6 +555,9 @@ const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random(
 const uniqN=a=>{const m=new Map();for(const x of a){const k=norm(x);if(k&&!m.has(k))m.set(k,x)}return[...m.values()]};
 const byName=(a,b)=>String(a.name).localeCompare(b.name,"ja");
 const WD="日月火水木金土";
+const AGES=["10歳未満","10代","20代","30代","40代","50代","60代","70代","80代以上"],SEXES=["女性","男性","その他・不明"],BUYS=["新規","継続"];
+const svChips=(key,list,cur)=>`<div class="chips" style="flex-wrap:wrap">${list.map(x=>`<button type="button" class="chip" data-sv="${key}|${esc(x)}" aria-pressed="${cur===x}">${esc(x)}</button>`).join("")}</div>`;
+const svGet=key=>{const b=document.querySelector(`#sheet [data-sv^="${key}|"][aria-pressed="true"]`);return b?b.dataset.sv.slice(key.length+1):""};
 const fmtDate=s=>{const d=new Date(String(s)+"T00:00:00");return isNaN(d)?String(s||""):`${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`};
 const catList=()=>[...new Set(S.products.map(p=>p.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
 const salesOf=pid=>S.sales.filter(s=>s.pid===pid).sort((a,b)=>String(b.date).localeCompare(String(a.date))||(b.createdAt||0)-(a.createdAt||0));
@@ -719,6 +730,10 @@ function editSale(id,pid,from){
     <datalist id="salelist">${S.products.slice().sort(byName).map(p=>`<option value="${esc(p.name)}">`).join("")}</datalist>
     <div class="two"><label class="fl">日付<input class="f" type="date" id="e_date" value="${esc(s.date||"")}"></label>
     <label class="fl">個数<input class="f" type="number" inputmode="numeric" min="1" id="e_qty" value="${esc(s.qty||1)}"></label></div>
+    <div class="fl">新規・継続${svChips("buy",BUYS,s.buy||"")}</div>
+    <div class="fl">年代${svChips("age",AGES,s.age||"")}</div>
+    <div class="fl">性別${svChips("sex",SEXES,s.sex||"")}</div>
+    <p class="hint" style="margin:-4px 0 0">年代・性別は薬を使う人について入れておくと、集計で傾向が見られます。もう一度押すと選択を外せます。</p>
     <label class="fl">金額（合計・任意）<input class="f" type="number" inputmode="numeric" min="0" id="e_amount" value="${s.amount?esc(s.amount):""}" placeholder="円"></label>
     <label class="fl">相談内容・症状<input class="f" id="e_consult" value="${esc(s.consult||"")}" placeholder="例：のどの痛み、胃もたれ、子ども用の解熱"></label>
     <label class="fl">メモ・ふり返り<textarea id="e_smemo" placeholder="この商品を選んだ理由、比べた商品、次に生かしたいことなど">${esc(s.memo||"")}</textarea></label>
@@ -744,15 +759,20 @@ function renderSales(){
   if(!S.sales.length){el.innerHTML=`<div class="stack">${head}<div class="empty"><strong>まだ販売記録がありません</strong>売れた商品・相談内容・選んだ理由を残しておくと、よく出る商品や自分の提案のくせが見えてきます。</div></div>`;return}
   if(S.salesView==="list"){
     const by={};list.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||(b.createdAt||0)-(a.createdAt||0)).forEach(s=>(by[s.date]=by[s.date]||[]).push(s));
-    el.innerHTML=`<div class="stack">${head}${list.length?Object.entries(by).map(([d,ss])=>`<div><h5 class="dayh">${esc(fmtDate(d))}</h5><div class="list">${ss.map(s=>{const p=pById(s.pid);return`<button class="row" data-sale="${s.id}"><span class="band ${riskCls(p?.risk)}"></span><span class="main"><h3>${esc(s.name)}</h3><span class="meta">${esc([s.consult,s.memo&&"メモあり"].filter(Boolean).join("・"))}</span></span><span class="side"><span class="flag" style="background:var(--chip)">×${esc(s.qty)}</span>${s.amount?`<span class="small">¥${(+s.amount).toLocaleString()}</span>`:""}</span></button>`}).join("")}</div></div>`).join(""):`<div class="empty">この月の記録はありません</div>`}</div>`;
+    el.innerHTML=`<div class="stack">${head}${list.length?Object.entries(by).map(([d,ss])=>`<div><h5 class="dayh">${esc(fmtDate(d))}</h5><div class="list">${ss.map(s=>{const p=pById(s.pid);return`<button class="row" data-sale="${s.id}"><span class="band ${riskCls(p?.risk)}"></span><span class="main"><h3>${esc(s.name)}</h3><span class="meta">${esc([s.buy,s.age,s.sex,s.consult,s.memo&&"メモあり"].filter(Boolean).join("・"))}</span></span><span class="side"><span class="flag" style="background:var(--chip)">×${esc(s.qty)}</span>${s.amount?`<span class="small">¥${(+s.amount).toLocaleString()}</span>`:""}</span></button>`}).join("")}</div></div>`).join(""):`<div class="empty">この月の記録はありません</div>`}</div>`;
   }else{
     const agg=(keyf)=>{const m=new Map();for(const s of list){const k=keyf(s)||"（未分類）";m.set(k,(m.get(k)||0)+(+s.qty||0))}return[...m.entries()].sort((a,b)=>b[1]-a[1])};
     const bars=(arr,max)=>arr.map(([k,n])=>`<div class="hbar"><span class="lab">${esc(k)}</span><span><i style="width:${n/max*100}%"></i></span><span class="n">${n}</span></div>`).join("");
+    const cntBy=(keyf,order)=>{const m=new Map(order.map(k=>[k,0]));let none=0;for(const s of list){const k=keyf(s);if(k&&m.has(k))m.set(k,m.get(k)+1);else none++}const a=[...m.entries()].filter(([,n])=>n);if(none)a.push(["未入力",none]);return a};
+    const byBuy=cntBy(s=>s.buy,BUYS),byAge=cntBy(s=>s.age,AGES),bySex=cntBy(s=>s.sex,SEXES),mx=a=>Math.max(1,...a.map(x=>x[1]));
     const byP=agg(s=>s.name).slice(0,10),byC=agg(s=>pById(s.pid)?.category||s.category),byW=agg(s=>s.consult).filter(([k])=>k!=="（未分類）").slice(0,10);
     el.innerHTML=`<div class="stack">${head}${list.length?`
       <div class="card"><h4>よく売れた商品（個数）</h4>${bars(byP,byP[0]?.[1]||1)}</div>
       <div class="card"><h4>分類別（個数）</h4>${bars(byC,byC[0]?.[1]||1)}</div>
-      ${byW.length?`<div class="card"><h4>多かった相談内容</h4>${bars(byW,byW[0][1])}</div>`:""}`:`<div class="empty">この期間の記録はありません</div>`}</div>`;
+      ${byW.length?`<div class="card"><h4>多かった相談内容</h4>${bars(byW,byW[0][1])}</div>`:""}
+      <div class="card"><h4>新規・継続（件数）</h4>${bars(byBuy,mx(byBuy))}</div>
+      <div class="card"><h4>年代別（件数）</h4>${bars(byAge,mx(byAge))}</div>
+      <div class="card"><h4>性別（件数）</h4>${bars(bySex,mx(bySex))}</div>`:`<div class="empty">この期間の記録はありません</div>`}</div>`;
   }
 }
 $("#view-sales").addEventListener("click",e=>{
@@ -764,7 +784,7 @@ $("#view-sales").addEventListener("click",e=>{
 });
 
 /* ---------- 端末内の保存（IndexedDB） ---------- */
-const APP_VER="2026.10.29a";
+const APP_VER="2026.10.29b";
 const IDB=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open("otc-techo",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
   const tx=async(mode,fn)=>{const d=await open();return new Promise((res,rej)=>{const t=d.transaction("kv",mode),r=fn(t.objectStore("kv"));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})};
   return{get:k=>tx("readonly",s=>s.get(k)),set:(k,v)=>tx("readwrite",s=>s.put(v,k)),del:k=>tx("readwrite",s=>s.delete(k))}})();
