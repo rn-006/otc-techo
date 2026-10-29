@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="ja"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OTC手帳">
+<meta name="theme-color" content="#f5f7f6">
+<title>OTC早見手帳</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+Antique:wght@500;700;900&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 調剤棚の手帳：白い紙＋深い緑青のインク、区分は色帯で。一覧→詳細シートの2層 */
+:root{
+  --bg:#f5f7f6; --paper:#ffffff; --ink:#15302b; --sub:#5b6f6a; --line:#dbe3e0;
+  --accent:#0d6b5e; --accent-weak:#e2f1ed; --chip:#eef3f1;
+  --r1:#c62f3a; --r1w:#fde8ea; --r2s:#c4571b; --r2sw:#fdeee4; --r2:#a87200; --r2w:#fbf3dc; --r3:#2f63b0; --r3w:#e6eefb;
+  --warn:#b35c00; --warnw:#fff3e2; --bad:#b4232f; --badw:#fdeaec; --ok:#1d7a4d; --okw:#e3f4ea;
+  --f-disp:"Zen Kaku Gothic Antique","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  --f-body:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1715; --paper:#16211e; --ink:#e4efec; --sub:#9db1ab; --line:#2a3a36;
+  --accent:#4cc3ad; --accent-weak:#173832; --chip:#1d2b28;
+  --r1:#ff7b84; --r1w:#3a1d21; --r2s:#ff9b5e; --r2sw:#3a2518; --r2:#f2c046; --r2w:#33290f; --r3:#86aef0; --r3w:#1b2740;
+  --warn:#ffb25e; --warnw:#33240f; --bad:#ff7b84; --badw:#3a1d21; --ok:#6fd39f; --okw:#163024; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1715; --paper:#16211e; --ink:#e4efec; --sub:#9db1ab; --line:#2a3a36;
+  --accent:#4cc3ad; --accent-weak:#173832; --chip:#1d2b28;
+  --r1:#ff7b84; --r1w:#3a1d21; --r2s:#ff9b5e; --r2sw:#3a2518; --r2:#f2c046; --r2w:#33290f; --r3:#86aef0; --r3w:#1b2740;
+  --warn:#ffb25e; --warnw:#33240f; --bad:#ff7b84; --badw:#3a1d21; --ok:#6fd39f; --okw:#163024; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.65 var(--f-body);-webkit-text-size-adjust:100%}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:720px;margin:0 auto;padding-inline:16px;padding-block:0 96px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px 10px;display:grid;gap:10px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font:900 22px/1.2 var(--f-disp);margin:0;letter-spacing:.02em}
+.brand small{color:var(--sub);font-size:12px}
+.search{display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:0 12px}
+.search input{border:0;background:none;flex:1;min-width:0;padding:10px 0;outline:none}
+.search svg{flex:none;color:var(--sub)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:4px 12px;font-size:13px;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+.count{color:var(--sub);font-size:12px;margin:4px 2px 8px;font-variant-numeric:tabular-nums}
+.list{display:grid;gap:8px}
+.row{display:grid;grid-template-columns:6px 1fr auto;gap:12px;align-items:stretch;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 12px 12px 0;text-align:left;width:100%}
+.row .band{border-radius:0 4px 4px 0;background:var(--line)}
+.row .main{min-width:0}
+.row h3{margin:0;font:700 16px/1.35 var(--f-disp)}
+.row .meta{color:var(--sub);font-size:12px}
+.row .ings{font-size:13px;margin-top:4px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.row .side{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.risk{display:inline-block;font:700 11px/1 var(--f-disp);padding:4px 7px;border-radius:4px;white-space:nowrap}
+.risk.r1{color:var(--r1);background:var(--r1w)} .risk.r2s{color:var(--r2s);background:var(--r2sw)}
+.risk.r2{color:var(--r2);background:var(--r2w)} .risk.r3{color:var(--r3);background:var(--r3w)} .risk.rx{color:var(--sub);background:var(--chip)}
+.band.r1{background:var(--r1)} .band.r2s{background:var(--r2s)} .band.r2{background:var(--r2)} .band.r3{background:var(--r3)}
+.flag{font-size:11px;padding:2px 6px;border-radius:4px;white-space:nowrap}
+.flag.todo{color:var(--warn);background:var(--warnw)} .flag.done{color:var(--ok);background:var(--okw)}
+.empty{background:var(--paper);border:1px dashed var(--line);border-radius:12px;padding:28px 20px;text-align:center;color:var(--sub)}
+.empty strong{display:block;color:var(--ink);font:700 16px var(--f-disp);margin-bottom:6px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--paper);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
+.appname{font:900 17px/1.2 var(--f-disp);letter-spacing:.02em}
+h2.page{font:900 26px/1.25 var(--f-disp);margin:0}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--chip);border-radius:12px;padding:4px;gap:4px;margin-top:4px}
+.seg button{border:0;background:none;border-radius:9px;padding:8px 0;font-size:14px;color:var(--sub)}
+.seg button[aria-pressed="true"]{background:var(--paper);color:var(--accent);font-weight:700;box-shadow:0 1px 3px rgb(0 0 0/.1)}
+.stack{display:grid;gap:12px;margin-top:12px}
+.small{font-size:12px;color:var(--sub)}
+.btn.big{width:100%;padding:12px;font-size:15px;border-radius:12px}
+.hero-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.cmpsel{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pick{display:inline-flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:4px 5px 4px 12px;font-size:13px}
+.pick button{border:0;background:var(--chip);border-radius:999px;width:24px;height:24px;line-height:1;padding:0}
+.cmpwrap{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:12px;-webkit-overflow-scrolling:touch}
+table.cmp{border-collapse:separate;border-spacing:0;font-size:13px;min-width:100%}
+table.cmp th,table.cmp td{padding:9px 10px;border-top:1px solid var(--line);vertical-align:top;text-align:left}
+table.cmp thead th{border-top:0;font:700 14px/1.35 var(--f-disp)}
+table.cmp th:first-child{position:sticky;left:0;background:var(--paper);color:var(--sub);font:400 12px/1.4 var(--f-body);width:5.2em;min-width:5.2em;z-index:1;border-right:1px solid var(--line)}
+table.cmp td,table.cmp thead th:not(:first-child){min-width:10em;max-width:15em}
+table.cmp ul{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+mark.same{background:var(--accent-weak);color:var(--accent);font-weight:700;border-radius:3px;padding:0 3px}
+.qhead{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
+.meter{height:6px;background:var(--chip);border-radius:3px;overflow:hidden}.meter i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.qtext{font:700 18px/1.5 var(--f-disp);margin:2px 0 14px;text-wrap:pretty}
+.qopts{display:grid;gap:8px}
+.qopt{text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:12px 14px;font-size:15px;line-height:1.5}
+.qopt:disabled{cursor:default;opacity:1}
+.qopt.right{border-color:var(--ok);background:var(--okw);color:var(--ok);font-weight:700}
+.qopt.wrong{border-color:var(--bad);background:var(--badw);color:var(--bad)}
+.qexp{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:grid;gap:6px;font-size:14px}
+.qexp strong{font:700 16px var(--f-disp)}
+.stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat div{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 6px;text-align:center}
+.stat b{display:block;font:900 22px/1.2 var(--f-disp);font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--sub)}
+.big-num{font:900 28px/1.2 var(--f-disp);font-variant-numeric:tabular-nums}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px}
+.hbar{display:grid;grid-template-columns:minmax(6em,40%) 1fr 2.6em;gap:8px;align-items:center;font-size:13px;padding:4px 0}
+.hbar .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar i{display:block;height:10px;border-radius:5px;background:var(--accent);min-width:3px}
+.hbar .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--sub)}
+.monthnav{display:flex;align-items:center;justify-content:space-between}
+.monthnav strong{font:700 16px var(--f-disp)}
+.dayh{margin:10px 2px 2px;font:700 13px var(--f-disp);color:var(--sub)}
+.revbar{position:sticky;bottom:0;z-index:3;background:var(--paper);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;align-items:center}
+nav.tabs button{border:0;background:none;padding:9px 0 8px;display:grid;justify-items:center;gap:2px;font-size:11px;color:var(--sub)}
+nav.tabs button[aria-selected="true"]{color:var(--accent);font-weight:700}
+/* sheet */
+.sheet{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet .bar{position:sticky;top:0;z-index:2;background:var(--bg);display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.sheet .bar .t{flex:1;min-width:0;font:700 15px var(--f-disp);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet .inner{max-width:720px;margin:0 auto;padding-inline:16px;padding-block:16px 48px;display:grid;gap:14px}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:7px 12px;font-size:14px;white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--paper);font-weight:700}
+.btn.ghost{border-color:transparent;background:none}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.hero h2{font:900 24px/1.3 var(--f-disp);margin:6px 0 2px;text-wrap:balance}
+.hero .meta{color:var(--sub);font-size:13px}
+.verify{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:10px;font-size:13px}
+.verify.todo{background:var(--warnw);color:var(--warn)} .verify.done{background:var(--okw);color:var(--ok)}
+.verify span{flex:1;min-width:12em}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card h4{margin:0 0 8px;font:700 13px var(--f-disp);letter-spacing:.08em;color:var(--sub)}
+.card.no{border-color:color-mix(in srgb,var(--bad) 40%,var(--line))} .card.no h4{color:var(--bad)}
+.card.ask{border-color:color-mix(in srgb,var(--warn) 40%,var(--line))} .card.ask h4{color:var(--warn)}
+.card ul{margin:0;padding-left:1.2em;display:grid;gap:4px}
+.card p{margin:0;white-space:pre-wrap}
+.points{display:flex;flex-wrap:wrap;gap:6px}
+.points span{background:var(--accent-weak);color:var(--accent);border-radius:6px;padding:3px 8px;font-size:13px;font-weight:700}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl td,.tbl th{padding:8px 4px;border-top:1px solid var(--line);vertical-align:top;text-align:left}
+.tbl th{font-weight:400;color:var(--sub);font-size:12px;border-top:0}
+.tbl .amt{font-family:var(--f-mono);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--sub)}
+.ingbtn{border:0;background:none;padding:0;text-align:left;color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.role{display:inline-block;font-size:12px;background:var(--chip);border-radius:4px;padding:1px 6px;margin-top:2px}
+.se{display:grid;grid-template-columns:5.5em 1fr;gap:4px 10px;font-size:14px}
+.se dt{color:var(--sub);font-size:12px;padding-top:2px}
+.se dd{margin:0}
+textarea,input.f,select.f{width:100%;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{min-height:5em;resize:vertical}
+label.fl{display:grid;gap:4px;font-size:12px;color:var(--sub)}
+.form{display:grid;gap:12px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.two{grid-template-columns:1fr}}
+.hint{font-size:12px;color:var(--sub)}
+.drop{border:2px dashed var(--line);border-radius:14px;padding:28px 16px;text-align:center;background:var(--paper);display:grid;gap:8px;justify-items:center}
+.drop.on{border-color:var(--accent);background:var(--accent-weak)}
+.queue{display:grid;gap:8px}
+.q{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+.q .n{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q .s{font-size:12px;color:var(--sub)}
+.q .s.err{color:var(--bad)}
+.prog{grid-column:1/-1;height:4px;background:var(--chip);border-radius:2px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:20;max-width:90vw}
+.notice{font-size:12px;color:var(--sub);line-height:1.6}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--badw);color:var(--bad);border-radius:8px;padding:8px 10px;font-size:13px}
+.dose{width:100%;border-collapse:collapse;font-size:15px}
+.dose th{font-weight:400;color:var(--sub);font-size:12px;text-align:left;padding:0 6px 6px 0}
+.dose td{padding:9px 6px 9px 0;border-top:1px solid var(--line);vertical-align:top}
+.dose td.age{font-size:13px;color:var(--sub);width:34%}
+.dose td.amt2{font:700 18px/1.2 var(--f-disp);font-variant-numeric:tabular-nums}
+.dose tr.ng td{color:var(--bad)} .dose tr.ng td.amt2{font-size:14px}
+.dose-meta{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin-top:10px;font-size:14px}
+.dose-meta dt{color:var(--sub);font-size:12px;padding-top:2px}
+.dose-meta dd{margin:0}
+.rx{display:grid;gap:12px}
+.rx-g h5{margin:0 0 4px;font:700 12px var(--f-disp);color:var(--sub);letter-spacing:.06em}
+.rx-g ul{list-style:none;padding:0;margin:0;display:grid;gap:4px}
+.rx-g li{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;font-size:14px}
+.lv{font:700 11px/1 var(--f-disp);padding:4px 6px;border-radius:4px;white-space:nowrap;margin-top:2px}
+.lv.no{color:var(--bad);background:var(--badw)} .lv.ask{color:var(--warn);background:var(--warnw)}
+.redo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--sub)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ---- アプリ版の追加 ---- */
+.big .row h3{font-size:18px}.big .row .ings,.big .row .meta{font-size:14px}.big .card p,.big .card li,.big .tbl,.big .se,.big .dose{font-size:16.5px}.big .qopt{font-size:17px}.big .qtext{font-size:20px}
+body{font-size:var(--fs,15px);-webkit-tap-highlight-color:transparent}
+input,select,textarea{font-size:16px!important}
+header.top{padding-top:calc(12px + env(safe-area-inset-top,0px));top:0}
+.row.ph{grid-template-columns:6px 56px 1fr auto}
+.pthumb{width:56px;height:56px;border-radius:9px;object-fit:cover;background:var(--chip);display:block;align-self:center}
+.pthumb.none{display:grid;place-items:center;color:var(--sub);opacity:.6}
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.ph-t{position:relative;width:84px;height:84px}
+.ph-t img{width:100%;height:100%;object-fit:cover;border-radius:10px;display:block;cursor:pointer}
+.ph-t.first img{box-shadow:0 0 0 2.5px var(--accent)}
+.ph-t em{position:absolute;left:4px;bottom:4px;font-style:normal;font-size:10px;background:var(--accent);color:var(--paper);border-radius:5px;padding:0 5px}
+.ph-t button{position:absolute;top:-7px;right:-7px;width:24px;height:24px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:13px;line-height:24px;padding:0}
+.filebtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer}
+.viewer{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain}
+.cmp-ph{width:100%;max-width:120px;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block;margin-bottom:6px;background:var(--chip)}
+.envrow{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:8px 0;border-bottom:1px solid var(--line)}
+.envrow span:last-child{text-align:right;word-break:break-all}
+.envrow b.ok{color:var(--ok)} .envrow b.ng{color:var(--bad)}
+.sh{font:700 12px var(--f-disp);color:var(--sub);letter-spacing:.06em;margin:18px 2px 6px}
+.swatches{display:flex;flex-wrap:wrap;gap:12px;padding:4px 2px}
+.sw{width:38px;height:38px;border-radius:50%;border:3px solid var(--paper);box-shadow:0 0 0 1px var(--line);padding:0;position:relative;overflow:hidden}
+.sw.on{box-shadow:0 0 0 2.5px var(--ink)}
+.sw.custom{background:conic-gradient(#f66,#fc6,#6c6,#6cf,#96f,#f6c,#f66)}
+.sw.custom input{position:absolute;inset:0;opacity:0;width:100%;height:100%}
+.tgl{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}
+.tgl small{display:block;font-size:12px;color:var(--sub)}
+.sw2{-webkit-appearance:none;appearance:none;flex:none;width:48px;height:29px;border-radius:99px;background:var(--line);position:relative;transition:.2s;margin:0}
+.sw2::after{content:'';position:absolute;top:3px;left:3px;width:23px;height:23px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.2s}
+.sw2:checked{background:var(--accent)}.sw2:checked::after{left:22px}
+.banner{font-size:13px;background:var(--accent-weak);color:var(--ink);padding:10px 36px 10px 12px;border-radius:10px;margin:8px 0 0;line-height:1.6;position:relative}
+.banner button{position:absolute;right:4px;top:4px;border:0;background:none;color:var(--sub);font-size:18px}
+.banner.w{background:var(--warnw);color:var(--warn)}
+details.ta summary{font-size:13px;color:var(--accent);cursor:pointer;padding:6px 0}
+</style>
+</head><body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="appname">OTC早見手帳</span><small id="sync">読み込み中…</small></div>
+    <div id="a2hs" class="banner" hidden>📱 Safariの共有ボタン →「ホーム画面に追加」でアプリとして使えます。<b>記録はホーム画面のアイコンから開いて入力してください</b>（Safariで開いたときとは保存場所が別になります）。<button type="button" aria-label="閉じる" onclick="this.parentElement.remove()">×</button></div>
+    <div id="warn" class="banner w" hidden>⚠️ この開き方ではデータを保存できません。閉じると入力した内容が消えます。設定 →「データ」の動作環境を確認してください。</div>
+    <h2 class="page" id="ptitle">商品</h2>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="商品名・成分・症状（例：頭痛、眠くなる）" autocomplete="off">
+    </div>
+    <div class="chips" id="filters"></div>
+  </header>
+
+  <main id="view-products"><div class="count" id="pcount"></div><div class="list" id="plist"></div></main>
+  <main id="view-ings" hidden><div class="count" id="icount"></div><div class="list" id="ilist"></div></main>
+  <main id="view-learn" hidden>
+    <div class="seg" role="group"><button data-seg="cmp">比較表</button><button data-seg="quiz">クイズ</button><button data-seg="check">確認作業</button></div>
+    <div id="learnBody"></div>
+  </main>
+  <main id="view-sales" hidden>
+    <div class="seg" role="group"><button data-seg2="list">記録</button><button data-seg2="stats">集計</button></div>
+    <div id="salesBody"></div>
+  </main>
+  <main id="view-settings" hidden>
+    <div class="seg" role="group"><button data-seg3="import">取り込み</button><button data-seg3="look">見た目</button><button data-seg3="data">データ</button></div>
+    <div data-sp="import" class="stack">
+      <div class="card"><h4>添付文書から商品を追加</h4>
+        <p style="margin:0 0 10px">添付文書のPDFをClaudeとのチャットに送ると、読み取ってこのアプリ用のデータファイル（.json）を作ります。届いたファイルを下のボタンから読み込んでください。</p>
+        <label class="btn pri big" style="display:block;text-align:center">データファイルを読み込む<input id="impFile2" type="file" accept=".json,application/json,text/plain" hidden></label>
+        <p class="hint" style="margin:8px 0 0">すでに入っている商品は上書きされず、空いている項目だけが埋まります。メモ・写真・照合済みの印はそのまま残ります。</p></div>
+      <button class="btn big" id="manual" type="button">手入力で商品を追加</button>
+      <div class="card"><h4>収録データの更新</h4>
+        <p style="margin:0 0 10px">アプリに入っている商品・成分のデータが新しくなっていれば、追加分を取り込みます（ネット接続が必要です）。</p>
+        <button class="btn big" id="seedUpd" type="button">更新を確認する</button><p class="hint" id="seedInfo" style="margin:8px 0 0"></p></div>
+    </div>
+    <div data-sp="look" class="stack" hidden>
+      <div class="card"><h4>テーマカラー</h4><div class="swatches" id="themeSw"></div></div>
+      <div class="card"><h4>明るさ</h4><div class="seg" id="modeSel" style="margin:0"></div></div>
+      <div class="card"><h4>文字の大きさ</h4><div class="seg" id="fsSel" style="margin:0"></div></div>
+      <div class="card" style="padding-block:4px"><label class="tgl" style="border:0"><span>商品一覧に写真を表示<small>写真がない商品は空の枠になります</small></span><input type="checkbox" class="sw2" id="optImg"></label></div>
+    </div>
+    <div data-sp="data" class="stack" hidden>
+      <div><div class="sh" style="margin-top:0">動作環境</div><div id="envBox"></div></div>
+      <div><div class="sh">バックアップ</div>
+        <p class="hint" style="margin:0 0 10px">データはこのiPhoneの中だけに保存されています。機種変更やアプリを削除する前に、写真・販売記録ごと書き出してください（「ファイル」アプリやiCloud Driveに保存できます）。</p>
+        <div class="stack" style="margin:0"><button class="btn big" id="expBtn" type="button">書き出す</button>
+        <label class="btn big" style="display:block;text-align:center">ファイルから読み込む<input id="impFile" type="file" accept=".json,application/json,text/plain" hidden></label></div>
+        <details class="ta"><summary>▶ テキストを貼り付けて読み込む</summary><textarea id="impText" placeholder="書き出したデータ（{ から始まる文字列）を貼り付け"></textarea><div style="display:flex;justify-content:flex-end;margin-top:6px"><button class="btn" id="impTextBtn" type="button">読み込む</button></div></details>
+        <p class="hint">同じ商品・記録は重複して読み込まれません。</p></div>
+    </div>
+  </main>
+</div>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="products" aria-selected="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M12 11v5M9.5 13.5h5"/></svg>商品</button>
+  <button role="tab" data-tab="ings" aria-selected="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7z"/><path d="m8.5 8.5 7 7"/></svg>成分</button>
+  <button role="tab" data-tab="learn" aria-selected="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>学習</button>
+  <button role="tab" data-tab="sales" aria-selected="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>販売</button>
+  <button role="tab" data-tab="settings" aria-selected="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>設定</button>
+</nav>
+
+<section class="sheet" id="sheet" hidden></section>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const RISKS=[["第1類医薬品","r1"],["指定第2類医薬品","r2s"],["第2類医薬品","r2"],["第3類医薬品","r3"]];
+const riskCls=r=>{const s=String(r||"");if(s.includes("1類"))return"r1";if(s.includes("指定"))return"r2s";if(s.includes("2類"))return"r2";if(s.includes("3類"))return"r3";return"rx"};
+const riskShort=r=>({r1:"第1類",r2s:"指定第2類",r2:"第2類",r3:"第3類"})[riskCls(r)]||(r||"区分未設定");
+const norm=s=>String(s||"").normalize("NFKC").replace(/\s+/g,"").toLowerCase();
+const hash=s=>{let h=5381;for(const c of norm(s))h=(h*33^c.codePointAt(0))>>>0;return"i"+h.toString(36)};
+const lines=v=>Array.isArray(v)?v.filter(Boolean):String(v||"").split("\n").map(s=>s.trim()).filter(Boolean);
+const now=()=>Date.now();
+
+let db=null;
+const LS={get(k,d){try{const v=localStorage.getItem("otc."+k);return v?JSON.parse(v):d}catch(_){return d}},set(k,v){try{localStorage.setItem("otc."+k,JSON.stringify(v))}catch(_){}}};
+const z2=n=>String(n).padStart(2,"0");
+const ymd=d=>`${d.getFullYear()}-${z2(d.getMonth()+1)}-${z2(d.getDate())}`;
+const S={products:[],ings:[],sales:[],quiz:{},tab:"products",q:"",filter:"all",ifilter:"all",loaded:false,
+  cmp:LS.get("cmp",[]),learn:LS.get("learn","cmp"),qopt:LS.get("qopt",{kind:"mix",scope:"all",verifiedOnly:false}),qz:null,
+  review:null,revScope:"all",salesView:"list",month:ymd(new Date()).slice(0,7),statAll:false};
+const TITLES={products:"商品",ings:"成分",learn:"学習",sales:"販売記録",settings:"設定"};
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2600)}
+
+/* ---------- data ---------- */
+async function boot(){
+  db=localDB;
+  db.collection("products").onSnapshot(s=>{S.products=s.docs.map(d=>({id:d.id,...d.data()}));S.loaded=true;render();refreshSheet()});
+  db.collection("ingredients").onSnapshot(s=>{S.ings=s.docs.map(d=>({id:d.id,...d.data()}));render();refreshSheet()});
+  db.collection("sales").onSnapshot(s=>{S.sales=s.docs.map(d=>({id:d.id,...d.data()}));renderSales();refreshSheet()});
+  db.collection("quiz").onSnapshot(s=>{S.quiz=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));if(S.tab==="learn"&&S.learn==="quiz"&&!S.qz)renderLearn()});
+}
+async function saveProduct(p){const {id,...data}=p;data.updatedAt=now();if(id){await db.doc("products/"+id).set(data);return id}data.createdAt=now();const ref=await db.collection("products").add(data);return ref.id}
+async function saveIng(i){const id=i.id||hash(i.name);const {id:_,...data}=i;data.updatedAt=now();await db.doc("ingredients/"+id).set(data);return id}
+const ingByName=n=>S.ings.find(i=>norm(i.name)===norm(n)||(i.aliases||[]).some(a=>norm(a)===norm(n)));
+const productsWith=n=>S.products.filter(p=>(p.ingredients||[]).some(x=>norm(x.name)===norm(n)||(ingByName(x.name)&&ingByName(x.name)===ingByName(n))));
+
+/* ---------- list views ---------- */
+function hay(p){return norm([p.name,p.maker,p.category,p.risk,(p.tags||[]).join(" "),(p.ingredients||[]).map(i=>i.name+" "+(i.role||"")).join(" "),lines(p.effects).join(" "),RX_GROUPS.map(([k])=>(p.restrictions?.[k]||[]).map(x=>x.text).join(" ")).join(" "),(p.checkPoints||[]).join(" "),lines(p.sideEffects?.map?.(s=>s.symptom)||[]).join(" "),p.memo].join(" "))}
+function render(){
+  const q=norm(S.q);
+  // filters
+  const f=$("#filters");
+  if(S.tab==="products"){
+    const cats=[...new Set(S.products.map(p=>p.category).filter(Boolean))].sort();
+    const opts=[["all","すべて"],...RISKS.map(([r,c])=>["risk:"+c,riskShort(r)]),["todo","未確認"],...cats.map(c=>["cat:"+c,c])];
+    f.innerHTML=opts.map(([k,l])=>`<button class="chip" data-f="${esc(k)}" aria-pressed="${S.filter===k}">${esc(l)}</button>`).join("");
+    f.hidden=false;
+    let ps=S.products.slice().sort((a,b)=>String(a.name).localeCompare(b.name,"ja"));
+    if(S.filter.startsWith("risk:"))ps=ps.filter(p=>riskCls(p.risk)===S.filter.slice(5));
+    else if(S.filter==="todo")ps=ps.filter(p=>!p.verified);
+    else if(S.filter.startsWith("cat:"))ps=ps.filter(p=>p.category===S.filter.slice(4));
+    if(q)ps=ps.filter(p=>hay(p).includes(q));
+    $("#pcount").textContent=S.loaded?`${ps.length}件${S.products.length!==ps.length?` ／ 全${S.products.length}件`:""}`:"";
+    $("#plist").innerHTML=!S.loaded?`<div class="empty">読み込み中…</div>`:!S.products.length?`<div class="empty"><strong>まだ商品がありません</strong>下の「取り込み」から添付文書のPDFを選ぶと、成分・効能・副作用に分けてここに並びます。</div>`:!ps.length?`<div class="empty">該当する商品がありません</div>`:ps.map(p=>{const c=riskCls(p.risk);return`<button class="row${showImg()?" ph":""}" data-p="${p.id}"><span class="band ${c}"></span>${showImg()?thumb(p):""}<span class="main"><h3>${esc(p.name||"名称未設定")}</h3><span class="meta">${esc([p.category,p.maker].filter(Boolean).join("・"))}</span><div class="ings">${esc((p.ingredients||[]).map(i=>i.name).join("、"))}</div></span><span class="side"><span class="risk ${c}">${esc(riskShort(p.risk))}</span>${p.verified?"":`<span class="flag todo">未確認</span>`}</span></button>`}).join("");
+  }else if(S.tab==="ings"){
+    const classes=[...new Set(S.ings.map(i=>i.class).filter(Boolean))].sort();
+    f.innerHTML=[["all","すべて"],...classes.map(c=>["cls:"+c,c])].map(([k,l])=>`<button class="chip" data-f="${esc(k)}" aria-pressed="${S.ifilter===k}">${esc(l)}</button>`).join("");f.hidden=false;
+    let is=S.ings.slice().sort((a,b)=>String(a.class||"").localeCompare(b.class||"","ja")||String(a.name).localeCompare(b.name,"ja"));
+    if(S.ifilter.startsWith("cls:"))is=is.filter(i=>i.class===S.ifilter.slice(4));
+    if(q)is=is.filter(i=>norm([i.name,(i.aliases||[]).join(" "),i.class,i.role,i.effects,i.sideEffects,i.memo].join(" ")).includes(q));
+    $("#icount").textContent=`${is.length}成分`;
+    $("#ilist").innerHTML=!S.ings.length?`<div class="empty"><strong>成分辞典は空です</strong>添付文書を取り込むと、含まれている成分がここに追加されます。</div>`:!is.length?`<div class="empty">該当する成分がありません</div>`:is.map(i=>`<button class="row" data-i="${i.id}"><span class="band"></span><span class="main"><h3>${esc(i.name)}</h3><span class="meta">${esc(i.class||"")}</span><div class="ings">${esc(i.role||"")}</div></span><span class="side"><span class="flag" style="background:var(--chip)">${productsWith(i.name).length}商品</span>${i.verified?"":`<span class="flag todo">未確認</span>`}</span></button>`).join("");
+  }else f.hidden=true;
+  renderLearn();renderSales();renderSettings();
+}
+$("#filters").onclick=e=>{const b=e.target.closest("[data-f]");if(!b)return;if(S.tab==="products")S.filter=b.dataset.f;else S.ifilter=b.dataset.f;render()};
+$("#q").oninput=e=>{S.q=e.target.value;render()};
+function setTab(t){S.tab=t;document.querySelectorAll("nav.tabs button").forEach(x=>x.setAttribute("aria-selected",x.dataset.tab===t));Object.keys(TITLES).forEach(k=>$("#view-"+k).hidden=k!==t);$(".search").hidden=!(t==="products"||t==="ings");$("#ptitle").textContent=TITLES[t];render();window.scrollTo(0,0)}
+document.querySelector("nav.tabs").onclick=e=>{const b=e.target.closest("[data-tab]");if(b)setTab(b.dataset.tab)};
+$("#plist").onclick=e=>{const b=e.target.closest("[data-p]");if(b)openProduct(b.dataset.p)};
+$("#ilist").onclick=e=>{const b=e.target.closest("[data-i]");if(b)openIng(b.dataset.i)};
+
+/* ---------- sheets ---------- */
+let current=null; // {type,id,mode}
+const sheet=$("#sheet");
+function closeSheet(){sheet.hidden=true;sheet.innerHTML="";current=null;S.review=null;document.body.style.overflow=""}
+function showSheet(html){sheet.innerHTML=html;sheet.hidden=false;document.body.style.overflow="hidden"}
+function refreshSheet(){if(!current||current.mode==="edit")return;const st=sheet.scrollTop;if(current.type==="p")openProduct(current.id,true);else if(current.type==="i")openIng(current.id,true);else if(current.type==="pick")S._pickDraw?.();else return;sheet.scrollTop=st}
+function revBar(type,id){const r=S.review;if(!r||r.type!==type||r.ids[r.i]!==id)return"";return`<div class="revbar"><span class="small">確認 ${r.i+1} / ${r.ids.length}</span><span style="flex:1"></span><button class="btn" data-act="revskip">あとで</button><button class="btn pri" data-act="revok">照合済みにして次へ</button></div>`}
+const ul=a=>`<ul>${lines(a).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`;
+function sec(title,body,cls=""){return body?`<div class="card ${cls}"><h4>${title}</h4>${body}</div>`:""}
+
+const RX_GROUPS=[["age","年齢"],["drugs","併用薬"],["conditions","持病・体質・アレルギー"],["pregnancy","妊娠・授乳"],["other","その他（運転・飲酒など）"]];
+function doseHtml(p){
+  const t=p.dosageTable;
+  if(!t||!(t.rows||[]).length)return p.dosage?`<p>${esc(p.dosage)}</p>`:"";
+  const meta=[["タイミング",t.timing],["服用間隔",t.interval],["1日の上限",t.maxPerDay],["使用期間",t.duration]].filter(x=>x[1]);
+  return`<table class="dose"><tr><th>年齢</th><th>1回量</th><th>回数</th></tr>${t.rows.map(r=>`<tr class="${r.ng?"ng":""}"><td class="age">${esc(r.age)}</td>${r.ng?`<td colspan="2" class="amt2">服用しない</td>`:`<td class="amt2">${esc(r.dose)}</td><td>${esc(r.times)}</td>`}</tr>`).join("")}</table>${meta.length?`<dl class="dose-meta">${meta.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`:""}${lines(t.notes).length?`<ul style="margin-top:8px">${lines(t.notes).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}`;
+}
+function rxHtml(p){
+  const r=p.restrictions;if(!r)return"";
+  const gs=RX_GROUPS.map(([k,l])=>[l,(r[k]||[]).filter(x=>x&&x.text)]).filter(g=>g[1].length);
+  if(!gs.length)return`<p class="hint">年齢・併用薬・持病などの制限は記載されていません</p>`;
+  return`<div class="rx">${gs.map(([l,items])=>`<div class="rx-g"><h5>${l}</h5><ul>${items.map(x=>`<li><span class="lv ${x.level==="不可"?"no":"ask"}">${x.level==="不可"?"不可":"相談"}</span><span>${esc(x.text)}</span></li>`).join("")}</ul></div>`).join("")}</div>`;
+}
+function openProduct(id,keep){
+  const p=S.products.find(x=>x.id===id);if(!p){closeSheet();return}
+  current={type:"p",id,mode:"view"};
+  const c=riskCls(p.risk);
+  const ing=(p.ingredients||[]).length?`<table class="tbl"><tr><th>成分</th><th>分量</th></tr>${p.ingredients.map(i=>`<tr><td><button class="ingbtn" data-goi="${esc(i.name)}">${esc(i.name)}</button>${i.role?`<br><span class="role">${esc(i.role)}</span>`:""}</td><td class="amt">${esc(i.amount||"")}</td></tr>`).join("")}</table>${p.ingredientsBasis?`<p class="hint" style="margin-top:6px">${esc(p.ingredientsBasis)}</p>`:""}`:"";
+  const se=(p.sideEffects||[]).length?`<dl class="se">${p.sideEffects.map(s=>`<dt>${esc(s.part||"")}</dt><dd>${esc(s.symptom||"")}</dd>`).join("")}</dl>`:"";
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="close" aria-label="戻る">‹ 戻る</button><span class="t">${esc(p.name)}</span><button class="btn" data-act="edit">編集</button></div>
+  <div class="inner">
+    <div class="hero"><span class="risk ${c}">${esc(p.risk||"区分未設定")}</span><h2>${esc(p.name||"名称未設定")}</h2><div class="meta">${esc([p.category,p.maker].filter(Boolean).join("・"))}</div>
+      <div class="hero-acts"><button class="btn" data-act="cmpp">${S.cmp.includes(p.id)?"比較から外す":"＋ 比較に追加"}</button><button class="btn" data-act="addsalep">販売を記録</button></div></div>
+    <div class="verify ${p.verified?"done":"todo"}"><span>${p.verified?"添付文書と照合済み":"AIの読み取り結果です。原本と照らし合わせてください"}</span>${revBar("p",p.id)?"":`<button class="btn" data-act="verify">${p.verified?"未確認に戻す":"照合済みにする"}</button>`}</div>
+    ${photoCard(p)}
+    ${sec("効能・効果",lines(p.effects).length?`<p>${esc(lines(p.effects).join("\n"))}</p>`:"")}
+    ${(p.checkPoints||[]).length?`<div class="card"><h4>確認ポイント</h4><div class="points">${p.checkPoints.map(x=>`<span>${esc(x)}</span>`).join("")}</div></div>`:""}
+    ${p.restrictions?sec("使える人・併用の制限",rxHtml(p),"ask"):""}
+    ${sec("用法・用量",doseHtml(p))}
+    ${sec("成分と役割",ing)}
+    ${sec("してはいけないこと",lines(p.donts).length?ul(p.donts):"","no")}
+    ${sec("相談すること",lines(p.consult).length?ul(p.consult):"","ask")}
+    ${sec("副作用",se)}
+    ${sec("まれに起こる重篤な症状",lines(p.serious).length?ul(p.serious):"","no")}
+    ${sec("その他の注意・保管",lines(p.otherNotes).length?ul(p.otherNotes):"")}
+    <div class="card"><h4>メモ</h4><textarea id="memo" placeholder="覚えるコツ、よく聞かれること、類似品との違いなど">${esc(p.memo||"")}</textarea><div style="display:flex;justify-content:flex-end;margin-top:6px"><button class="btn" data-act="memo">メモを保存</button></div></div>
+    ${(()=>{const sl=salesOf(p.id);return`<div class="card"><h4>販売記録（${sl.length}件・計${sl.reduce((a,s)=>a+(+s.qty||0),0)}個）</h4>${sl.length?`<ul>${sl.slice(0,5).map(s=>`<li><button class="ingbtn" data-esale="${s.id}" style="font-weight:400">${esc(fmtDate(s.date))}</button>　×${esc(s.qty)}${s.consult?`　${esc(s.consult)}`:""}</li>`).join("")}</ul>${sl.length>5?`<p class="hint" style="margin-top:4px">ほか${sl.length-5}件は「販売」タブで見られます</p>`:""}`:`<p class="hint">まだ記録はありません</p>`}<div style="display:flex;justify-content:flex-end;margin-top:6px"><button class="btn" data-act="addsalep">販売を記録</button></div></div>`})()}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${p.sourceFile?`<span class="hint">取り込み元：${esc(p.sourceFile)}</span>`:""}</div>
+    <div id="delbox"><button class="btn danger" data-act="askdel">この商品を削除</button></div>
+  </div>${revBar("p",p.id)}`);
+  if(!keep)sheet.scrollTop=0;
+}
+function openIng(id,keep){
+  const i=S.ings.find(x=>x.id===id);if(!i){closeSheet();return}
+  current={type:"i",id,mode:"view"};
+  const ps=productsWith(i.name);
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="close">‹ 戻る</button><span class="t">${esc(i.name)}</span><button class="btn" data-act="editi">編集</button></div>
+  <div class="inner">
+    <div class="hero"><span class="risk rx">${esc(i.class||"分類未設定")}</span><h2>${esc(i.name)}</h2>${(i.aliases||[]).length?`<div class="meta">別名：${esc(i.aliases.join("、"))}</div>`:""}</div>
+    <div class="verify ${i.verified?"done":"todo"}"><span>${i.verified?"内容を確認済み":"AIが作成した一般的な解説です。内容を確認してください"}</span>${revBar("i",i.id)?"":`<button class="btn" data-act="verifyi">${i.verified?"未確認に戻す":"確認済みにする"}</button>`}</div>
+    ${sec("役割",i.role?`<p>${esc(i.role)}</p>`:"")}
+    ${sec("主な効果・しくみ",i.effects?`<p>${esc(i.effects)}</p>`:"")}
+    ${sec("主な副作用",i.sideEffects?`<p>${esc(i.sideEffects)}</p>`:"","ask")}
+    ${sec("注意点・相互作用",i.cautions?`<p>${esc(i.cautions)}</p>`:"","no")}
+    <div class="card"><h4>この成分を含む商品（${ps.length}）</h4>${ps.length?`<div class="list">${ps.map(p=>`<button class="row" data-goto="${p.id}" style="grid-template-columns:6px 1fr auto"><span class="band ${riskCls(p.risk)}"></span><span class="main"><h3>${esc(p.name)}</h3><span class="meta">${esc((p.ingredients||[]).find(x=>norm(x.name)===norm(i.name))?.amount||"")}</span></span><span class="side"><span class="risk ${riskCls(p.risk)}">${esc(riskShort(p.risk))}</span></span></button>`).join("")}</div>`:`<p class="hint">登録済みの商品にはありません</p>`}</div>
+    <div class="card"><h4>メモ</h4><textarea id="memo">${esc(i.memo||"")}</textarea><div style="display:flex;justify-content:flex-end;margin-top:6px"><button class="btn" data-act="memoi">メモを保存</button></div></div>
+    <div id="delbox"><button class="btn danger" data-act="askdeli">この成分を削除</button></div>
+  </div>${revBar("i",i.id)}`);
+  if(!keep)sheet.scrollTop=0;
+}
+
+/* product edit form */
+function ingToText(a){return(a||[]).map(i=>[i.name,i.amount,i.role].map(x=>x||"").join(" | ")).join("\n")}
+function textToIng(t){return lines(t).map(l=>{const [name,amount,role]=l.split("|").map(s=>s.trim());return{name,amount:amount||"",role:role||""}}).filter(i=>i.name)}
+function seToText(a){return(a||[]).map(s=>`${s.part||""} | ${s.symptom||""}`).join("\n")}
+function textToSe(t){return lines(t).map(l=>{const k=l.indexOf("|");return k<0?{part:"",symptom:l}:{part:l.slice(0,k).trim(),symptom:l.slice(k+1).trim()}})}
+function doseRowsText(t){return(t?.rows||[]).map(r=>r.ng?`${r.age} | 服用しない`:`${r.age} | ${r.dose||""} | ${r.times||""}`).join("\n")}
+function textToDoseRows(t){return lines(t).map(l=>{const [age,dose,times]=l.split("|").map(s=>s.trim());const ng=/服用しない|使用しない|不可/.test(dose||"");return{age:age||"",dose:ng?"":dose||"",times:ng?"":times||"",ng}}).filter(r=>r.age)}
+const RX_KEY={"年齢":"age","併用薬":"drugs","併用":"drugs","持病":"conditions","持病・体質":"conditions","体質":"conditions","アレルギー":"conditions","妊娠":"pregnancy","授乳":"pregnancy","妊娠・授乳":"pregnancy","その他":"other"};
+function rxText(r){if(!r)return"";return RX_GROUPS.flatMap(([k,l])=>(r[k]||[]).map(x=>`${({age:"年齢",drugs:"併用薬",conditions:"持病",pregnancy:"妊娠",other:"その他"})[k]} | ${x.level==="不可"?"不可":"相談"} | ${x.text}`)).join("\n")}
+function textToRx(t){const r={age:[],drugs:[],conditions:[],pregnancy:[],other:[]};for(const l of lines(t)){const p=l.split("|").map(s=>s.trim());let k="other",lv="相談",text=l;if(p.length>=3){k=RX_KEY[p[0]]||Object.entries(RX_KEY).find(([a])=>p[0].includes(a))?.[1]||"other";lv=p[1].includes("不可")?"不可":"相談";text=p.slice(2).join(" | ")}else if(p.length===2){lv=p[0].includes("不可")?"不可":"相談";text=p[1]}if(text)r[k].push({text,level:lv})}return r}
+function editProduct(id){
+  const p=id?S.products.find(x=>x.id===id):{verified:true};
+  current={type:"p",id,mode:"edit"};
+  const ta=(k,label,val,hint="")=>`<label class="fl">${label}<textarea id="e_${k}">${esc(val)}</textarea>${hint?`<span class="hint">${hint}</span>`:""}</label>`;
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="${id?"back":"close"}">キャンセル</button><span class="t">${id?"商品を編集":"商品を追加"}</span><button class="btn pri" data-act="savep">保存</button></div>
+  <div class="inner"><div class="form">
+    <label class="fl">商品名<input class="f" id="e_name" value="${esc(p.name||"")}"></label>
+    <div class="two"><label class="fl">メーカー<input class="f" id="e_maker" value="${esc(p.maker||"")}"></label>
+    <label class="fl">リスク区分<select class="f" id="e_risk"><option value="">未設定</option>${RISKS.map(([r])=>`<option ${p.risk===r?"selected":""}>${r}</option>`).join("")}</select></label></div>
+    <div class="two"><label class="fl">分類<input class="f" id="e_category" list="catlist" value="${esc(p.category||"")}" placeholder="かぜ薬、解熱鎮痛薬 など"></label>
+    <label class="fl">タグ（読点区切り）<input class="f" id="e_tags" value="${esc((p.tags||[]).join("、"))}"></label></div>
+    <datalist id="catlist">${[...new Set(S.products.map(x=>x.category).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    ${ta("ingredients","成分（1行に「成分名 | 分量 | 役割」）",ingToText(p.ingredients),"例：イブプロフェン | 150mg | 解熱鎮痛")}
+    <label class="fl">成分量の基準<input class="f" id="e_basis" value="${esc(p.ingredientsBasis||"")}" placeholder="3錠中 など"></label>
+    ${ta("checkPoints","接客で確認すること（1行に1つ）",(p.checkPoints||[]).join("\n"))}
+    ${ta("effects","効能・効果",lines(p.effects).join("\n"))}
+    ${ta("doseRows","用法・用量の表（1行に「年齢 | 1回量 | 回数」、服用しない年齢は「年齢 | 服用しない」）",doseRowsText(p.dosageTable),"例：15歳以上 | 2錠 | 1日3回")}
+    <div class="two"><label class="fl">タイミング<input class="f" id="e_timing" value="${esc(p.dosageTable?.timing||"")}" placeholder="食後なるべく30分以内"></label>
+    <label class="fl">服用間隔<input class="f" id="e_interval" value="${esc(p.dosageTable?.interval||"")}" placeholder="4時間以上あける"></label></div>
+    <div class="two"><label class="fl">1日の上限<input class="f" id="e_maxPerDay" value="${esc(p.dosageTable?.maxPerDay||"")}"></label>
+    <label class="fl">使用期間<input class="f" id="e_duration" value="${esc(p.dosageTable?.duration||"")}"></label></div>
+    ${ta("doseNotes","用法の補足（1行に1つ）",lines(p.dosageTable?.notes).join("\n"))}
+    ${ta("rx","使える人・併用の制限（1行に「区分 | 不可または相談 | 内容」。区分は 年齢・併用薬・持病・妊娠・その他）",rxText(p.restrictions),"例：併用薬 | 不可 | 他の解熱鎮痛薬、かぜ薬")}
+    ${ta("dosage","用法・用量（原文メモ）",p.dosage||"")}
+    ${ta("donts","してはいけないこと（1行に1つ）",lines(p.donts).join("\n"))}
+    ${ta("consult","相談すること（1行に1つ）",lines(p.consult).join("\n"))}
+    ${ta("sideEffects","副作用（1行に「部位 | 症状」）",seToText(p.sideEffects))}
+    ${ta("serious","重篤な症状（1行に1つ）",lines(p.serious).join("\n"))}
+    ${ta("otherNotes","その他の注意・保管（1行に1つ）",lines(p.otherNotes).join("\n"))}
+  </div></div>`);
+  sheet.scrollTop=0;
+}
+function editIng(id){
+  const i=S.ings.find(x=>x.id===id);current={type:"i",id,mode:"edit"};
+  const ta=(k,l,v)=>`<label class="fl">${l}<textarea id="e_${k}">${esc(v||"")}</textarea></label>`;
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="backi">キャンセル</button><span class="t">成分を編集</span><button class="btn pri" data-act="savei">保存</button></div>
+  <div class="inner"><div class="form">
+    <div class="two"><label class="fl">成分名<input class="f" id="e_name" value="${esc(i.name)}"></label><label class="fl">分類<input class="f" id="e_class" value="${esc(i.class||"")}"></label></div>
+    <label class="fl">別名（読点区切り）<input class="f" id="e_aliases" value="${esc((i.aliases||[]).join("、"))}"></label>
+    ${ta("role","役割（ひとことで）",i.role)}${ta("effects","主な効果・しくみ",i.effects)}${ta("sideEffects","主な副作用",i.sideEffects)}${ta("cautions","注意点・相互作用",i.cautions)}
+  </div></div>`);sheet.scrollTop=0;
+}
+const v=k=>($("#e_"+k)?.value||"").trim();
+const split=s=>s.split(/[、,，]/).map(x=>x.trim()).filter(Boolean);
+
+sheet.addEventListener("click",async e=>{
+  const g=e.target.closest("[data-goi]");if(g){const i=ingByName(g.dataset.goi);if(i)openIng(i.id);else toast("成分辞典にまだありません");return}
+  const gt=e.target.closest("[data-goto]");if(gt){openProduct(gt.dataset.goto);return}
+  const es=e.target.closest("[data-esale]");if(es){editSale(es.dataset.esale,null,current?.id);return}
+  const pv=e.target.closest("[data-phv]");if(pv){viewPhoto(current.id,+pv.dataset.phv);return}
+  const px=e.target.closest("[data-phx]");if(px){if(!px.dataset.c){px.dataset.c=1;px.textContent="?";toast("もう一度押すと写真を外します");setTimeout(()=>{if(px.isConnected){delete px.dataset.c;px.textContent="×"}},3000);return}rmPhoto(current.id,+px.dataset.phx);return}
+  const pk=e.target.closest("[data-pick]");if(pk){const pid=pk.dataset.pick;if(S.cmp.includes(pid))S.cmp=S.cmp.filter(x=>x!==pid);else if(S.cmp.length<4)S.cmp.push(pid);else{toast("比べられるのは4商品までです");return}LS.set("cmp",S.cmp);S._pickDraw?.();renderLearn();return}
+  const b=e.target.closest("[data-act]");if(!b)return;
+  const a=b.dataset.act, id=current?.id;
+  try{
+  if(a==="close"){const back=current?.from;closeSheet();if(back&&S.products.some(p=>p.id===back))openProduct(back)}
+  else if(a==="cmpp"){if(S.cmp.includes(id))S.cmp=S.cmp.filter(x=>x!==id);else if(S.cmp.length<4)S.cmp.push(id);else{toast("比べられるのは4商品までです");return}LS.set("cmp",S.cmp);toast(S.cmp.includes(id)?`比較に追加しました（${S.cmp.length}商品）`:"比較から外しました");openProduct(id,true);renderLearn()}
+  else if(a==="addsalep")editSale(null,id,id);
+  else if(a==="revok"){const r=S.review;await db.doc((r.type==="p"?"products/":"ingredients/")+id).update({verified:true,updatedAt:now()});r.done++;reviewNext()}
+  else if(a==="revskip")reviewNext();
+  else if(a==="saves"){
+    const nm=v("sname");if(!nm){toast("商品名を入れてください");return}
+    const p=S.products.find(x=>norm(x.name)===norm(nm));
+    const old=id?S.sales.find(x=>x.id===id):null;
+    const data={date:v("date")||ymd(new Date()),name:p?.name||nm,pid:p?.id||"",category:p?.category||"",qty:Math.max(1,parseInt(v("qty"),10)||1),amount:Math.max(0,parseInt(v("amount"),10)||0),consult:v("consult"),memo:v("smemo"),createdAt:old?.createdAt||now(),updatedAt:now()};
+    b.disabled=true;
+    if(id)await db.doc("sales/"+id).set(data);else await db.collection("sales").add(data);
+    const back=current.from;toast("記録しました");closeSheet();
+    if(back&&S.products.some(x=>x.id===back))openProduct(back);else{S.month=data.date.slice(0,7);renderSales()}
+  }
+  else if(a==="askdels"){$("#delbox").innerHTML=`<div class="confirm"><span style="flex:1">この記録を削除しますか？</span><button class="btn" data-act="canceldels">やめる</button><button class="btn danger" data-act="dels">削除する</button></div>`}
+  else if(a==="canceldels"){$("#delbox").innerHTML=`<button class="btn danger" data-act="askdels">この記録を削除</button>`}
+  else if(a==="dels"){const back=current.from;await db.doc("sales/"+id).delete();closeSheet();toast("削除しました");if(back&&S.products.some(x=>x.id===back))openProduct(back)}
+  else if(a==="edit")editProduct(id);
+  else if(a==="back")openProduct(id);
+  else if(a==="editi")editIng(id);
+  else if(a==="backi")openIng(id);
+  else if(a==="verify"){const p=S.products.find(x=>x.id===id);await db.doc("products/"+id).update({verified:!p.verified,updatedAt:now()});toast(p.verified?"未確認に戻しました":"照合済みにしました")}
+  else if(a==="verifyi"){const i=S.ings.find(x=>x.id===id);await db.doc("ingredients/"+id).update({verified:!i.verified,updatedAt:now()})}
+  else if(a==="memo"){await db.doc("products/"+id).update({memo:$("#memo").value,updatedAt:now()});toast("メモを保存しました")}
+  else if(a==="memoi"){await db.doc("ingredients/"+id).update({memo:$("#memo").value,updatedAt:now()});toast("メモを保存しました")}
+  else if(a==="askdel"||a==="askdeli"){$("#delbox").innerHTML=`<div class="confirm"><span style="flex:1">削除すると元に戻せません。</span><button class="btn" data-act="canceldel">やめる</button><button class="btn danger" data-act="${a==="askdel"?"del":"deli"}">削除する</button></div>`}
+  else if(a==="canceldel"){current.type==="p"?openProduct(id,true):openIng(id,true)}
+  else if(a==="del"){const ph=pById(id)?.photos||[];await db.doc("products/"+id).delete();for(const x of ph){await KV.del("img:"+x);delete imgCache[x]}closeSheet();toast("削除しました")}
+  else if(a==="deli"){await db.doc("ingredients/"+id).delete();closeSheet();toast("削除しました")}
+  else if(a==="savep"){
+    if(!v("name")){toast("商品名を入れてください");return}
+    const old=id?S.products.find(x=>x.id===id):{verified:true};
+    const p={...old,id,name:v("name"),maker:v("maker"),risk:v("risk"),category:v("category"),tags:split(v("tags")),ingredients:textToIng(v("ingredients")),ingredientsBasis:v("basis"),checkPoints:lines(v("checkPoints")),effects:lines(v("effects")),dosage:v("dosage"),dosageTable:{rows:textToDoseRows(v("doseRows")),timing:v("timing"),interval:v("interval"),maxPerDay:v("maxPerDay"),duration:v("duration"),notes:lines(v("doseNotes"))},restrictions:textToRx(v("rx")),donts:lines(v("donts")),consult:lines(v("consult")),sideEffects:textToSe(v("sideEffects")),serious:lines(v("serious")),otherNotes:lines(v("otherNotes"))};
+    b.disabled=true;const nid=await saveProduct(p);current={type:"p",id:nid,mode:"view"};toast("保存しました");
+    setTimeout(()=>openProduct(nid),150);
+  }
+  else if(a==="savei"){
+    const old=S.ings.find(x=>x.id===id);
+    await db.doc("ingredients/"+id).set({...Object.fromEntries(Object.entries(old).filter(([k])=>k!=="id")),name:v("name"),class:v("class"),aliases:split(v("aliases")),role:v("role"),effects:v("effects"),sideEffects:v("sideEffects"),cautions:v("cautions"),updatedAt:now()});
+    toast("保存しました");openIng(id);
+  }
+  }catch(err){toast("保存できませんでした："+(err?.message||err?.code||"通信エラー"))}
+});
+$("#manual").onclick=()=>editProduct(null);
+
+/* ---------- shared helpers ---------- */
+const pById=id=>S.products.find(p=>p.id===id);
+const ingKey=n=>ingByName(n)?.id||norm(n);
+const youngest=p=>{const r=(p.dosageTable?.rows||[]).filter(r=>!r.ng);return r.length?r[r.length-1].age:""};
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+const uniqN=a=>{const m=new Map();for(const x of a){const k=norm(x);if(k&&!m.has(k))m.set(k,x)}return[...m.values()]};
+const byName=(a,b)=>String(a.name).localeCompare(b.name,"ja");
+const WD="日月火水木金土";
+const fmtDate=s=>{const d=new Date(String(s)+"T00:00:00");return isNaN(d)?String(s||""):`${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`};
+const catList=()=>[...new Set(S.products.map(p=>p.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
+const salesOf=pid=>S.sales.filter(s=>s.pid===pid).sort((a,b)=>String(b.date).localeCompare(String(a.date))||(b.createdAt||0)-(a.createdAt||0));
+
+/* ---------- 学習タブ ---------- */
+function renderLearn(){
+  if(S.tab!=="learn")return;
+  document.querySelectorAll("#view-learn [data-seg]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.seg===S.learn));
+  $("#learnBody").innerHTML=!S.loaded?`<div class="empty" style="margin-top:12px">読み込み中…</div>`:S.learn==="quiz"?quizHtml():S.learn==="check"?checkHtml():cmpHtml();
+}
+
+/* 比較表 */
+function rxCell(p,k){const a=(p.restrictions?.[k]||[]).filter(x=>x&&x.text);return a.length?`<ul>${a.map(x=>`<li><span class="lv ${x.level==="不可"?"no":"ask"}">${x.level==="不可"?"不可":"相談"}</span> ${esc(x.text)}</li>`).join("")}</ul>`:`<span class="small">記載なし</span>`}
+function cmpHtml(){
+  S.cmp=S.cmp.filter(id=>pById(id));
+  const ps=S.cmp.map(pById);
+  const sel=`<div class="cmpsel">${ps.map(p=>`<span class="pick">${esc(p.name)}<button data-cmpdel="${p.id}" aria-label="${esc(p.name)}を外す">×</button></span>`).join("")}${ps.length<4?`<button class="btn" data-act2="cmpadd">＋ 商品を選ぶ</button>`:""}${ps.length?`<button class="btn ghost" data-act2="cmpclear">すべて外す</button>`:""}</div>`;
+  let sugg="";
+  if(ps.length&&ps.length<4){const cat=ps[0].category;const ss=S.products.filter(p=>cat&&p.category===cat&&!S.cmp.includes(p.id)).sort(byName);if(ss.length)sugg=`<div><div class="small" style="margin-bottom:4px">同じ分類（${esc(cat)}）から追加</div><div class="chips">${ss.map(p=>`<button class="chip" data-cmpaddid="${p.id}">＋ ${esc(p.name)}</button>`).join("")}</div></div>`}
+  if(ps.length<2)return`<div class="stack">${sel}${sugg}<div class="empty"><strong>2〜4商品を並べて比べられます</strong>「商品を選ぶ」か、商品の詳細画面の「比較に追加」から選んでください。</div></div>`;
+  const cnt={};ps.forEach(p=>new Set((p.ingredients||[]).map(i=>ingKey(i.name))).forEach(k=>cnt[k]=(cnt[k]||0)+1));
+  const row=(label,f)=>`<tr><th scope="row">${label}</th>${ps.map(p=>`<td>${f(p)}</td>`).join("")}</tr>`;
+  const none=`<span class="small">記載なし</span>`;
+  return`<div class="stack">${sel}${sugg}
+  <p class="small" style="margin:0"><mark class="same">緑の成分</mark>は比べている商品どうしで共通の成分です。表は横にスクロールできます。</p>
+  <div class="cmpwrap"><table class="cmp"><thead><tr><th></th>${ps.map(p=>`<th>${p.photos?.[0]?`<img class="cmp-ph" data-img="${esc(p.photos[0])}" alt="">`:""}<button class="ingbtn" data-openp="${p.id}">${esc(p.name)}</button></th>`).join("")}</tr></thead><tbody>
+  ${row("区分",p=>`<span class="risk ${riskCls(p.risk)}">${esc(riskShort(p.risk))}</span>`)}
+  ${row("分類",p=>esc(p.category||"—"))}
+  ${row("成分",p=>(p.ingredients||[]).length?`<ul>${p.ingredients.map(i=>`<li>${cnt[ingKey(i.name)]>1?`<mark class="same">${esc(i.name)}</mark>`:esc(i.name)} <span class="small">${esc(i.amount||"")}</span></li>`).join("")}</ul>${p.ingredientsBasis?`<div class="small" style="margin-top:4px">${esc(p.ingredientsBasis)}</div>`:""}`:none)}
+  ${row("効能・効果",p=>lines(p.effects).length?`<ul>${lines(p.effects).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:none)}
+  ${row("用法・用量",p=>{const r=p.dosageTable?.rows||[];return r.length?`<ul>${r.map(x=>`<li${x.ng?` style="color:var(--bad)"`:""}>${esc(x.age)}：${x.ng?"服用しない":esc([x.dose,x.times].filter(Boolean).join("・"))}</li>`).join("")}</ul>${p.dosageTable.timing?`<div class="small" style="margin-top:4px">${esc(p.dosageTable.timing)}</div>`:""}`:p.dosage?esc(p.dosage):none})}
+  ${row("年齢",p=>rxCell(p,"age"))}
+  ${row("併用",p=>rxCell(p,"drugs"))}
+  ${row("持病・体質",p=>rxCell(p,"conditions"))}
+  ${row("妊娠・授乳",p=>rxCell(p,"pregnancy"))}
+  ${row("運転・その他",p=>rxCell(p,"other"))}
+  ${row("副作用",p=>(p.sideEffects||[]).length?`<ul>${p.sideEffects.map(s=>`<li><span class="small">${esc(s.part)}</span> ${esc(s.symptom)}</li>`).join("")}</ul>`:none)}
+  ${row("販売数",p=>{const sl=salesOf(p.id);return sl.length?`${sl.reduce((a,s)=>a+(+s.qty||0),0)}個 <span class="small">（${sl.length}件）</span>`:`<span class="small">0</span>`})}
+  ${row("メモ",p=>p.memo?`<span style="white-space:pre-wrap">${esc(p.memo)}</span>`:`<span class="small">—</span>`)}
+  </tbody></table></div></div>`;
+}
+function openPicker(){
+  current={type:"pick",mode:"view"};
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="close">‹ 戻る</button><span class="t">比べる商品を選ぶ（4つまで）</span><button class="btn pri" data-act="close">完了</button></div>
+  <div class="inner"><div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="pickq" type="search" placeholder="商品名・成分・分類で探す" autocomplete="off"></div><div class="list" id="pickl"></div></div>`);
+  S._pickDraw=()=>{const el=$("#pickl");if(!el)return;const q=norm($("#pickq").value);const ps=S.products.filter(p=>!q||hay(p).includes(q)).sort(byName);
+    el.innerHTML=ps.length?ps.map(p=>{const on=S.cmp.includes(p.id);return`<button class="row" data-pick="${p.id}" aria-pressed="${on}"><span class="band ${riskCls(p.risk)}"></span><span class="main"><h3>${esc(p.name)}</h3><span class="meta">${esc(p.category||"")}</span></span><span class="side">${on?`<span class="flag done">選択中</span>`:""}</span></button>`}).join(""):`<div class="empty">該当する商品がありません</div>`};
+  $("#pickq").oninput=()=>S._pickDraw();S._pickDraw();sheet.scrollTop=0;
+}
+
+/* クイズ */
+const QKINDS=[["mix","ミックス"],["role","成分の役割"],["cls","成分の分類"],["ing","商品に含まれる成分"],["risk","リスク区分"],["age","使える年齢"],["eff","効能・効果"]];
+const RISK_FULL={r1:"第1類医薬品",r2s:"指定第2類医薬品",r2:"第2類医薬品",r3:"第3類医薬品"};
+const mkQ=(key,q,ans,ds,exp,ref,fixed)=>{const opts=fixed||shuffle([ans,...shuffle(ds).slice(0,3)]);return{key,q,opts,ans:opts.indexOf(ans),exp,...ref}};
+const GEN={
+  role:i=>{if(!i.role)return null;const d=uniqN(S.ings.filter(x=>x.role&&x.class!==i.class&&norm(x.role)!==norm(i.role)).map(x=>x.role));return d.length<3?null:mkQ("role_"+i.id,`「${i.name}」の役割は？`,i.role,d,[i.class,i.effects].filter(Boolean).join("。"),{iid:i.id})},
+  cls:i=>{if(!i.class)return null;const d=uniqN(S.ings.map(x=>x.class).filter(c=>c&&norm(c)!==norm(i.class)));return d.length<3?null:mkQ("cls_"+i.id,`「${i.name}」の分類は？`,i.class,d,i.role||"",{iid:i.id})},
+  ing:p=>{const own=p.ingredients||[];if(!own.length)return null;const ok=new Set(own.map(x=>ingKey(x.name)));const c=own[Math.random()*own.length|0];
+    const d=uniqN(S.products.filter(x=>x.category!==p.category).flatMap(x=>x.ingredients||[]).filter(x=>!ok.has(ingKey(x.name))).map(x=>x.name));
+    return d.length<3?null:mkQ("ing_"+p.id,`「${p.name}」に含まれている成分は？`,c.name,d,`${c.name}${c.amount?`（${c.amount}）`:""}${c.role?`：${c.role}`:""}`,{pid:p.id})},
+  risk:p=>{const c=riskCls(p.risk);if(c==="rx")return null;return mkQ("risk_"+p.id,`「${p.name}」のリスク区分は？`,RISK_FULL[c],[],p.category||"",{pid:p.id},Object.values(RISK_FULL))},
+  age:p=>{const a=youngest(p);if(!a)return null;const d=uniqN(S.products.map(youngest).filter(x=>x&&norm(x)!==norm(a)));const ng=(p.dosageTable?.rows||[]).filter(r=>r.ng).map(r=>r.age);
+    return d.length<3?null:mkQ("age_"+p.id,`「${p.name}」を使える一番下の年齢区分は？`,a,d,ng.length?`${ng.join("、")}は使わない`:"",{pid:p.id})},
+  eff:p=>{const e=lines(p.effects);if(!e.length)return null;const cut=s=>s.length>52?s.slice(0,51)+"…":s;const c=cut(e[0]);
+    const d=uniqN(S.products.filter(x=>x.category!==p.category).map(x=>lines(x.effects)[0]).filter(Boolean).map(cut).filter(x=>norm(x)!==norm(c)));
+    return d.length<3?null:mkQ("eff_"+p.id,`「${p.name}」の効能・効果は？`,c,d,p.category||"",{pid:p.id})}
+};
+const ING_KINDS=new Set(["role","cls"]);
+function qPool(){const o=S.qopt;const ps=S.products.filter(p=>(!o.verifiedOnly||p.verified)&&(o.scope==="all"||p.category===o.scope));let is=S.ings.filter(i=>!o.verifiedOnly||i.verified);
+  if(o.scope!=="all"){const ks=new Set(ps.flatMap(p=>(p.ingredients||[]).map(x=>ingByName(x.name)?.id).filter(Boolean)));is=is.filter(i=>ks.has(i.id))}return{ps,is}}
+const weakKeys=()=>Object.entries(S.quiz).filter(([,v])=>v.wrong>0&&v.wrong>=v.right).map(([k])=>k);
+function startQuiz(weak){
+  const out=[],seen=new Set();
+  if(weak){for(const k of shuffle(weakKeys())){const at=k.indexOf("_"),kind=k.slice(0,at),id=k.slice(at+1);if(!GEN[kind])continue;const t=ING_KINDS.has(kind)?S.ings.find(i=>i.id===id):pById(id);const q=t&&GEN[kind](t);if(q){out.push(q);if(out.length>=10)break}}}
+  else{const {ps,is}=qPool();const kinds=S.qopt.kind==="mix"?Object.keys(GEN):[S.qopt.kind];
+    for(let n=0;out.length<10&&n<300;n++){const kind=kinds[Math.random()*kinds.length|0];const pool=ING_KINDS.has(kind)?is:ps;if(!pool.length)continue;const q=GEN[kind](pool[Math.random()*pool.length|0]);if(q&&!seen.has(q.key)){seen.add(q.key);out.push(q)}}}
+  if(!out.length){toast(weak?"復習する問題はまだありません":"出題できる問題がありません。範囲を広げてください");return}
+  S.qz={qs:out,i:0,picked:null,score:0,wrong:[]};renderLearn();window.scrollTo(0,0);
+}
+async function answer(k){const z=S.qz;if(!z||z.picked!==null)return;z.picked=k;const q=z.qs[z.i];const ok=k===q.ans;if(ok)z.score++;else z.wrong.push(q);renderLearn();
+  const cur=S.quiz[q.key]||{right:0,wrong:0};const nd={right:(cur.right||0)+(ok?1:0),wrong:(cur.wrong||0)+(ok?0:1),last:now(),lastOk:ok};S.quiz[q.key]=nd;
+  try{await db.doc("quiz/"+q.key).set(nd)}catch(_){}}
+function quizHtml(){
+  const z=S.qz;
+  if(!z){
+    const st=Object.values(S.quiz),tot=st.reduce((a,v)=>a+(v.right||0)+(v.wrong||0),0),ok=st.reduce((a,v)=>a+(v.right||0),0),weak=weakKeys().length,o=S.qopt;
+    return`<div class="stack">
+    <div class="stat"><div><b>${tot}</b><span>これまでの解答</span></div><div><b>${tot?Math.round(ok/tot*100):0}%</b><span>正答率</span></div><div><b>${weak}</b><span>苦手な問題</span></div></div>
+    <div class="card form">
+      <label class="fl">出題の種類<select class="f" id="qkind">${QKINDS.map(([k,l])=>`<option value="${k}" ${o.kind===k?"selected":""}>${l}</option>`).join("")}</select></label>
+      <label class="fl">範囲<select class="f" id="qscope"><option value="all">すべての商品</option>${catList().map(c=>`<option ${o.scope===c?"selected":""}>${esc(c)}</option>`).join("")}</select></label>
+      <label class="chk"><input type="checkbox" id="qver" ${o.verifiedOnly?"checked":""}> 照合済みの商品・成分だけから出題</label>
+      <p class="hint" style="margin:0">未確認のデータはAIの読み取り結果なので、まちがいが含まれている可能性があります。照合が進んだら、このチェックを入れるのがおすすめです。</p>
+    </div>
+    <button class="btn pri big" data-act2="qstart">10問はじめる</button>
+    ${weak?`<button class="btn big" data-act2="qweak">苦手な問題を復習する（${weak}問）</button>`:""}
+    <p class="hint" style="margin:0">選択肢は登録済みのデータから自動で作ります。まちがえた問題は「苦手」に入り、正解した回数がまちがえた回数を上回ると外れます。</p></div>`;
+  }
+  if(z.i>=z.qs.length)return`<div class="stack"><div class="card" style="text-align:center"><div class="small">結果</div><div class="big-num" style="font-size:40px">${z.score} / ${z.qs.length}</div></div>
+    ${z.wrong.length?`<div class="card"><h4>まちがえた問題</h4><ul>${z.wrong.map(q=>`<li>${esc(q.q)}<br><span class="small">正解：</span>${esc(q.opts[q.ans])} <button class="ingbtn" style="font-size:12px" data-${q.pid?"openp":"openi"}="${q.pid||q.iid}">詳細</button></li>`).join("")}</ul></div>`:""}
+    <button class="btn pri big" data-act2="qstart">もう10問</button><button class="btn big" data-act2="qhome">設定に戻る</button></div>`;
+  const q=z.qs[z.i],done=z.picked!==null;
+  return`<div class="stack"><div class="qhead"><span>${z.i+1} / ${z.qs.length}問</span><span>正解 ${z.score}</span></div><div class="meter"><i style="width:${(z.i+(done?1:0))/z.qs.length*100}%"></i></div>
+  <div class="card"><div class="qtext">${esc(q.q)}</div><div class="qopts">${q.opts.map((t,k)=>`<button class="qopt ${done?(k===q.ans?"right":k===z.picked?"wrong":""):""}" data-ans="${k}" ${done?"disabled":""}>${esc(t)}</button>`).join("")}</div>
+  ${done?`<div class="qexp"><strong style="color:var(--${z.picked===q.ans?"ok":"bad"})">${z.picked===q.ans?"正解":"不正解"}</strong>${q.exp?`<p>${esc(q.exp)}</p>`:""}<div><button class="ingbtn" data-${q.pid?"openp":"openi"}="${q.pid||q.iid}">${q.pid?"商品の詳細を見る":"成分の詳細を見る"}</button></div></div>`:""}</div>
+  ${done?`<button class="btn pri big" data-act2="qnext">${z.i+1<z.qs.length?"次の問題":"結果を見る"}</button>`:`<button class="btn ghost" data-act2="qhome">やめる</button>`}</div>`;
+}
+
+/* 確認作業 */
+function checkHtml(){
+  const pt=S.products.length,pv=S.products.filter(p=>p.verified).length,it=S.ings.length,iv=S.ings.filter(i=>i.verified).length;
+  const pct=(a,b)=>b?Math.round(a/b*100):0;
+  const scopeLeft=S.products.filter(p=>!p.verified&&(S.revScope==="all"||p.category===S.revScope)).length;
+  const need=S.products.filter(p=>!p.verified&&lines(p.otherNotes).some(x=>x.includes("要確認"))).sort(byName);
+  const unorg=S.products.filter(p=>!(p.dosageTable?.rows||[]).length||!p.restrictions).sort(byName);
+  const rows=ps=>`<div class="list">${ps.map(p=>`<button class="row" data-openp="${p.id}"><span class="band ${riskCls(p.risk)}"></span><span class="main"><h3>${esc(p.name)}</h3><span class="meta">${esc(p.category||"")}</span></span><span class="side">${p.verified?`<span class="flag done">照合済み</span>`:`<span class="flag todo">未確認</span>`}</span></button>`).join("")}</div>`;
+  return`<div class="stack">
+  <div class="card"><h4>商品の照合</h4><div><span class="big-num">${pv}</span> <span class="small">/ ${pt}件（${pct(pv,pt)}%）</span></div><div class="meter" style="margin:8px 0 12px"><i style="width:${pct(pv,pt)}%"></i></div>
+    <div class="form"><label class="fl">確認する範囲<select class="f" id="revscope"><option value="all">すべての分類</option>${catList().map(c=>`<option ${S.revScope===c?"selected":""}>${esc(c)}</option>`).join("")}</select></label>
+    <button class="btn pri big" data-act2="revp" ${scopeLeft?"":"disabled"}>${scopeLeft?`未確認の商品を順に確認する（${scopeLeft}件）`:"この範囲はすべて照合済みです"}</button></div></div>
+  <div class="card"><h4>成分辞典の確認</h4><div><span class="big-num">${iv}</span> <span class="small">/ ${it}成分（${pct(iv,it)}%）</span></div><div class="meter" style="margin:8px 0 12px"><i style="width:${pct(iv,it)}%"></i></div>
+    <button class="btn big" data-act2="revi" ${iv<it?"":"disabled"}>${iv<it?`未確認の成分を順に確認する（${it-iv}件）`:"すべて確認済みです"}</button></div>
+  <p class="hint" style="margin:0">確認画面では、手元の添付文書と見比べて合っていれば「照合済みにして次へ」を押します。まちがいは上の「編集」で直せます。「あとで」を押すと飛ばして次に進みます。</p>
+  ${need.length?`<div class="card ask"><h4>読み取り時に「要確認」が付いた商品（${need.length}）</h4>${rows(need)}</div>`:""}
+  ${unorg.length?`<div class="card"><h4>用法・用量の表や制限がまだない商品（${unorg.length}）</h4><p class="hint" style="margin:0 0 8px">詳細画面の「編集」から入力できます。Claudeに頼むと整理したデータファイルを作れます。</p>${rows(unorg)}</div>`:""}
+  </div>`;
+}
+function startReview(type){
+  const ids=type==="p"?S.products.filter(p=>!p.verified&&(S.revScope==="all"||p.category===S.revScope)).sort((a,b)=>String(a.category||"").localeCompare(b.category||"","ja")||byName(a,b)).map(p=>p.id)
+    :S.ings.filter(i=>!i.verified).sort((a,b)=>String(a.class||"").localeCompare(b.class||"","ja")||byName(a,b)).map(i=>i.id);
+  if(!ids.length){toast("未確認はありません");return}
+  S.review={type,ids,i:0,done:0};type==="p"?openProduct(ids[0]):openIng(ids[0]);
+}
+function reviewNext(){
+  const r=S.review;if(!r)return;r.i++;
+  while(r.i<r.ids.length&&!(r.type==="p"?pById(r.ids[r.i]):S.ings.find(x=>x.id===r.ids[r.i])))r.i++;
+  if(r.i>=r.ids.length){const d=r.done;closeSheet();toast(`おつかれさまでした。${d}件を照合済みにしました`);renderLearn();return}
+  r.type==="p"?openProduct(r.ids[r.i]):openIng(r.ids[r.i]);
+}
+
+$("#view-learn").addEventListener("click",e=>{
+  const sg=e.target.closest("[data-seg]");if(sg){S.learn=sg.dataset.seg;LS.set("learn",S.learn);renderLearn();return}
+  const op=e.target.closest("[data-openp]");if(op){openProduct(op.dataset.openp);return}
+  const oi=e.target.closest("[data-openi]");if(oi){openIng(oi.dataset.openi);return}
+  const cd=e.target.closest("[data-cmpdel]");if(cd){S.cmp=S.cmp.filter(x=>x!==cd.dataset.cmpdel);LS.set("cmp",S.cmp);renderLearn();return}
+  const ca=e.target.closest("[data-cmpaddid]");if(ca){if(S.cmp.length<4&&!S.cmp.includes(ca.dataset.cmpaddid))S.cmp.push(ca.dataset.cmpaddid);LS.set("cmp",S.cmp);renderLearn();return}
+  const an=e.target.closest("[data-ans]");if(an){answer(+an.dataset.ans);return}
+  const b=e.target.closest("[data-act2]");if(!b)return;const a=b.dataset.act2;
+  if(a==="cmpadd")openPicker();
+  else if(a==="cmpclear"){S.cmp=[];LS.set("cmp",S.cmp);renderLearn()}
+  else if(a==="qstart")startQuiz(false);
+  else if(a==="qweak")startQuiz(true);
+  else if(a==="qnext"){S.qz.i++;S.qz.picked=null;renderLearn();window.scrollTo(0,0)}
+  else if(a==="qhome"){S.qz=null;renderLearn()}
+  else if(a==="revp")startReview("p");
+  else if(a==="revi")startReview("i");
+});
+$("#view-learn").addEventListener("change",e=>{const t=e.target;
+  if(t.id==="qkind")S.qopt.kind=t.value;else if(t.id==="qscope")S.qopt.scope=t.value;else if(t.id==="qver")S.qopt.verifiedOnly=t.checked;
+  else if(t.id==="revscope"){S.revScope=t.value;renderLearn();return}
+  LS.set("qopt",S.qopt)});
+
+/* ---------- 販売記録 ---------- */
+function editSale(id,pid,from){
+  const s=id?S.sales.find(x=>x.id===id):{date:ymd(new Date()),qty:1,name:pid?pById(pid)?.name||"":""};if(!s)return;
+  current={type:"s",id,mode:"edit",from};
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="close">キャンセル</button><span class="t">${id?"販売記録を編集":"販売を記録"}</span><button class="btn pri" data-act="saves">保存</button></div>
+  <div class="inner"><div class="form">
+    <label class="fl">商品<input class="f" id="e_sname" list="salelist" value="${esc(s.name||"")}" placeholder="商品名を入れると候補が出ます" autocomplete="off"></label>
+    <datalist id="salelist">${S.products.slice().sort(byName).map(p=>`<option value="${esc(p.name)}">`).join("")}</datalist>
+    <div class="two"><label class="fl">日付<input class="f" type="date" id="e_date" value="${esc(s.date||"")}"></label>
+    <label class="fl">個数<input class="f" type="number" inputmode="numeric" min="1" id="e_qty" value="${esc(s.qty||1)}"></label></div>
+    <label class="fl">金額（合計・任意）<input class="f" type="number" inputmode="numeric" min="0" id="e_amount" value="${s.amount?esc(s.amount):""}" placeholder="円"></label>
+    <label class="fl">相談内容・症状<input class="f" id="e_consult" value="${esc(s.consult||"")}" placeholder="例：のどの痛み、胃もたれ、子ども用の解熱"></label>
+    <label class="fl">メモ・ふり返り<textarea id="e_smemo" placeholder="この商品を選んだ理由、比べた商品、次に生かしたいことなど">${esc(s.memo||"")}</textarea></label>
+    <p class="hint" style="margin:0">お客様の氏名など、個人が特定できる情報は書かないでください。</p>
+    ${id?`<div id="delbox"><button class="btn danger" data-act="askdels">この記録を削除</button></div>`:""}
+  </div></div>`);
+  sheet.scrollTop=0;
+}
+function shiftMonth(d){const [y,m]=S.month.split("-").map(Number);const t=new Date(y,m-1+d,1);S.month=`${t.getFullYear()}-${z2(t.getMonth()+1)}`;renderSales()}
+function renderSales(){
+  if(S.tab!=="sales")return;
+  document.querySelectorAll("#view-sales [data-seg2]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.seg2===S.salesView));
+  const el=$("#salesBody");
+  if(!S.loaded){el.innerHTML=`<div class="empty" style="margin-top:12px">読み込み中…</div>`;return}
+  const [y,m]=S.month.split("-").map(Number);
+  const all=S.statAll&&S.salesView==="stats";
+  const list=S.sales.filter(s=>all||String(s.date).startsWith(S.month));
+  const qty=list.reduce((a,s)=>a+(+s.qty||0),0),amt=list.reduce((a,s)=>a+(+s.amount||0),0);
+  const head=`<button class="btn pri big" data-act3="addsale">＋ 販売を記録</button>
+    ${S.salesView==="stats"?`<div class="chips"><button class="chip" data-statall="0" aria-pressed="${!S.statAll}">月ごと</button><button class="chip" data-statall="1" aria-pressed="${S.statAll}">全期間</button></div>`:""}
+    ${all?"":`<div class="monthnav"><button class="btn ghost" data-mon="-1" aria-label="前の月">‹ 前の月</button><strong>${y}年${m}月</strong><button class="btn ghost" data-mon="1" aria-label="次の月">次の月 ›</button></div>`}
+    <div class="stat"><div><b>${list.length}</b><span>記録</span></div><div><b>${qty}</b><span>個数</span></div><div><b>${amt?"¥"+amt.toLocaleString():"—"}</b><span>金額</span></div></div>`;
+  if(!S.sales.length){el.innerHTML=`<div class="stack">${head}<div class="empty"><strong>まだ販売記録がありません</strong>売れた商品・相談内容・選んだ理由を残しておくと、よく出る商品や自分の提案のくせが見えてきます。</div></div>`;return}
+  if(S.salesView==="list"){
+    const by={};list.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||(b.createdAt||0)-(a.createdAt||0)).forEach(s=>(by[s.date]=by[s.date]||[]).push(s));
+    el.innerHTML=`<div class="stack">${head}${list.length?Object.entries(by).map(([d,ss])=>`<div><h5 class="dayh">${esc(fmtDate(d))}</h5><div class="list">${ss.map(s=>{const p=pById(s.pid);return`<button class="row" data-sale="${s.id}"><span class="band ${riskCls(p?.risk)}"></span><span class="main"><h3>${esc(s.name)}</h3><span class="meta">${esc([s.consult,s.memo&&"メモあり"].filter(Boolean).join("・"))}</span></span><span class="side"><span class="flag" style="background:var(--chip)">×${esc(s.qty)}</span>${s.amount?`<span class="small">¥${(+s.amount).toLocaleString()}</span>`:""}</span></button>`}).join("")}</div></div>`).join(""):`<div class="empty">この月の記録はありません</div>`}</div>`;
+  }else{
+    const agg=(keyf)=>{const m=new Map();for(const s of list){const k=keyf(s)||"（未分類）";m.set(k,(m.get(k)||0)+(+s.qty||0))}return[...m.entries()].sort((a,b)=>b[1]-a[1])};
+    const bars=(arr,max)=>arr.map(([k,n])=>`<div class="hbar"><span class="lab">${esc(k)}</span><span><i style="width:${n/max*100}%"></i></span><span class="n">${n}</span></div>`).join("");
+    const byP=agg(s=>s.name).slice(0,10),byC=agg(s=>pById(s.pid)?.category||s.category),byW=agg(s=>s.consult).filter(([k])=>k!=="（未分類）").slice(0,10);
+    el.innerHTML=`<div class="stack">${head}${list.length?`
+      <div class="card"><h4>よく売れた商品（個数）</h4>${bars(byP,byP[0]?.[1]||1)}</div>
+      <div class="card"><h4>分類別（個数）</h4>${bars(byC,byC[0]?.[1]||1)}</div>
+      ${byW.length?`<div class="card"><h4>多かった相談内容</h4>${bars(byW,byW[0][1])}</div>`:""}`:`<div class="empty">この期間の記録はありません</div>`}</div>`;
+  }
+}
+$("#view-sales").addEventListener("click",e=>{
+  const sg=e.target.closest("[data-seg2]");if(sg){S.salesView=sg.dataset.seg2;renderSales();return}
+  const mo=e.target.closest("[data-mon]");if(mo){shiftMonth(+mo.dataset.mon);return}
+  const sa=e.target.closest("[data-statall]");if(sa){S.statAll=sa.dataset.statall==="1";renderSales();return}
+  const r=e.target.closest("[data-sale]");if(r){editSale(r.dataset.sale);return}
+  const b=e.target.closest("[data-act3]");if(b){if(!db){toast("保存先に接続できません");return}editSale(null)}
+});
+
+/* ---------- 端末内の保存（IndexedDB） ---------- */
+const APP_VER="2026.10.29a";
+const IDB=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open("otc-techo",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+  const tx=async(mode,fn)=>{const d=await open();return new Promise((res,rej)=>{const t=d.transaction("kv",mode),r=fn(t.objectStore("kv"));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})};
+  return{get:k=>tx("readonly",s=>s.get(k)),set:(k,v)=>tx("readwrite",s=>s.put(v,k)),del:k=>tx("readwrite",s=>s.delete(k))}})();
+let storeOK=true;const mem={};
+async function testStorage(){if(!window.indexedDB){storeOK=false;return}try{const t=String(Date.now());await Promise.race([IDB.set("__t",t),new Promise((_,j)=>setTimeout(j,3000))]);storeOK=(await IDB.get("__t"))===t}catch(e){storeOK=false}}
+const KV={
+  async get(k){if(!storeOK)return mem[k]??null;try{return(await IDB.get(k))??null}catch(e){return null}},
+  async set(k,v){if(!storeOK){mem[k]=v;return true}try{await IDB.set(k,v);return true}catch(e){console.error(e);return false}},
+  async del(k){if(!storeOK){delete mem[k];return}try{await IDB.del(k)}catch(e){}}};
+const COLS=["products","ingredients","sales","quiz"];
+const store={products:{},ingredients:{},sales:{},quiz:{}},subs={};
+const snap=c=>({docs:Object.entries(store[c]).map(([id,d])=>({id,data:()=>d}))});
+const emit=c=>(subs[c]||[]).forEach(cb=>cb(snap(c)));
+async function persist(c){if(!await KV.set("col:"+c,JSON.stringify(store[c])))toast("保存に失敗しました")}
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const localDB={
+  collection:c=>({onSnapshot(cb){(subs[c]=subs[c]||[]).push(cb);return()=>{}},async add(d){const id=newId();store[c][id]=d;emit(c);await persist(c);return{id}}}),
+  doc(path){const [c,id]=path.split("/");return{
+    async set(d){store[c][id]=d;emit(c);await persist(c)},
+    async update(d){store[c][id]={...(store[c][id]||{}),...d};emit(c);await persist(c)},
+    async delete(){delete store[c][id];emit(c);await persist(c)}}}};
+
+/* ---------- 設定・見た目 ---------- */
+let settings={theme:"#0d6b5e",mode:"auto",fs:"m",showImg:true,setTab:"import",seedVer:""};
+const saveSettings=()=>KV.set("settings-v1",JSON.stringify(settings));
+const THEMES=[["緑青","#0d6b5e"],["ブルーグレー","#6f829c"],["ネイビー","#3e5c86"],["ラベンダー","#8b7bc0"],["ピンク","#d77a95"],["コーラル","#e07a5f"],["マスタード","#b8901f"],["チャコール","#555a60"]];
+const hex2rgb=h=>{h=String(h).replace("#","");return[0,2,4].map(i=>parseInt(h.substr(i,2),16)||0)};
+const mixc=(h,w,t)=>{const a=hex2rgb(h),b=hex2rgb(w);return"#"+a.map((v,i)=>Math.round(v*(1-t)+b[i]*t).toString(16).padStart(2,"0")).join("")};
+const isDark=()=>settings.mode==="dark"||(settings.mode==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches);
+function applyLook(){const r=document.documentElement,c=settings.theme||"#0d6b5e",dk=isDark();
+  if(settings.mode==="auto")r.removeAttribute("data-theme");else r.dataset.theme=settings.mode;
+  r.style.setProperty("--accent",dk?mixc(c,"#ffffff",.35):c);r.style.setProperty("--accent-weak",dk?mixc(c,"#16211e",.72):mixc(c,"#ffffff",.88));
+  r.style.setProperty("--fs",settings.fs==="l"?"17px":"15px");r.classList.toggle("big",settings.fs==="l");
+  const m=document.querySelector("meta[name=theme-color]");if(m)m.content=dk?"#0f1715":"#f5f7f6"}
+try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",applyLook)}catch(e){}
+function renderSettings(){
+  if(S.tab!=="settings")return;
+  const t=settings.setTab||"import";
+  document.querySelectorAll("#view-settings [data-seg3]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.seg3===t));
+  document.querySelectorAll("#view-settings [data-sp]").forEach(p=>p.hidden=p.dataset.sp!==t);
+  const cur=settings.theme;
+  $("#themeSw").innerHTML=THEMES.map(([n,c])=>`<button type="button" class="sw${cur===c?" on":""}" style="background:${c}" aria-label="${n}" data-th="${c}"></button>`).join("")+`<label class="sw custom${THEMES.some(x=>x[1]===cur)?"":" on"}" aria-label="自由に選ぶ"><input type="color" id="thCustom" value="${esc(cur)}"></label>`;
+  $("#modeSel").innerHTML=[["auto","自動"],["light","ライト"],["dark","ダーク"]].map(([k,l])=>`<button type="button" data-mode="${k}" aria-pressed="${settings.mode===k}">${l}</button>`).join("");
+  $("#fsSel").innerHTML=[["m","標準"],["l","大きめ"]].map(([k,l])=>`<button type="button" data-fs="${k}" aria-pressed="${settings.fs===k}">${l}</button>`).join("");
+  $("#optImg").checked=settings.showImg!==false;
+  $("#seedInfo").textContent=settings.seedVer?`いまの収録データ：${settings.seedVer}版`:"";
+  renderEnv();
+}
+function renderEnv(){
+  const sa=navigator.standalone||matchMedia("(display-mode: standalone)").matches;
+  const nph=Object.values(store.products).reduce((a,p)=>a+(p.photos||[]).length,0);
+  const rows=[["データの保存",storeOK?'<b class="ok">できます</b>':'<b class="ng">できません</b>'],["開き方",sa?"ホーム画面のアプリ":"ブラウザ"],["開いている場所",esc((location.protocol||"")+"//"+(location.host||"（ファイル）"))],["ネット接続",navigator.onLine?"あり":"なし"],
+    ["商品・成分",`${Object.keys(store.products).length}件・${Object.keys(store.ingredients).length}成分`],["写真",nph+"枚"],["販売記録",Object.keys(store.sales).length+"件"],
+    ["オフライン対応",navigator.serviceWorker?.controller?'<b class="ok">有効</b>':"なし"],["アプリのバージョン",APP_VER],["収録データ",settings.seedVer||"—"]];
+  $("#envBox").innerHTML=rows.map(([a,b])=>`<div class="envrow"><span>${a}</span><span>${b}</span></div>`).join("")+(storeOK?"":`<p class="hint" style="color:var(--bad)">この開き方ではデータが保存されません。Safariで開いて「ホーム画面に追加」したアイコンから使ってください。</p>`);
+}
+$("#view-settings").addEventListener("click",async e=>{
+  const sg=e.target.closest("[data-seg3]");if(sg){settings.setTab=sg.dataset.seg3;saveSettings();renderSettings();return}
+  const th=e.target.closest("[data-th]");if(th){settings.theme=th.dataset.th;applyLook();renderSettings();saveSettings();return}
+  const md=e.target.closest("[data-mode]");if(md){settings.mode=md.dataset.mode;applyLook();renderSettings();saveSettings();return}
+  const fs=e.target.closest("[data-fs]");if(fs){settings.fs=fs.dataset.fs;applyLook();renderSettings();saveSettings();return}
+  if(e.target.closest("#expBtn"))exportData();
+  else if(e.target.closest("#impTextBtn")){await importJSON($("#impText").value);$("#impText").value=""}
+  else if(e.target.closest("#seedUpd"))checkSeed(e.target.closest("#seedUpd"));
+});
+$("#view-settings").addEventListener("change",async e=>{const t=e.target;
+  if(t.id==="thCustom"){settings.theme=t.value;applyLook();renderSettings();saveSettings()}
+  else if(t.id==="optImg"){settings.showImg=t.checked;saveSettings();toast(t.checked?"一覧に写真を表示します":"一覧に写真を表示しません")}
+  else if(t.id==="impFile"||t.id==="impFile2"){const f=t.files[0];t.value="";if(f)await importJSON(await f.text())}
+});
+
+/* ---------- 写真 ---------- */
+const imgCache={};
+async function getImg(id){if(!id)return null;if(imgCache[id])return imgCache[id];const v=await KV.get("img:"+id);if(v)imgCache[id]=v;return v}
+function hydrate(){document.querySelectorAll("img[data-img]").forEach(el=>{const id=el.dataset.img;el.removeAttribute("data-img");getImg(id).then(d=>{if(d)el.src=d})})}
+const hydObs=new MutationObserver(()=>{clearTimeout(hydObs.t);hydObs.t=setTimeout(hydrate,10)});hydObs.observe(document.body,{childList:true,subtree:true});
+const readURL=f=>new Promise((ok,ng)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>ng(r.error);r.readAsDataURL(f)});
+const loadEl=src=>new Promise((ok,ng)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ng;i.src=src});
+async function compress(file){
+  let src=null,data=null;
+  try{data=await readURL(file)}catch(e){}
+  if(data)try{src=await loadEl(data)}catch(e){}
+  if(!src&&window.createImageBitmap)try{src=await createImageBitmap(file)}catch(e){}
+  if(!src){if(data&&/^data:image\/(jpeg|png|gif|webp)/.test(data)&&file.size<5e6)return data;throw new Error(/hei[cf]/i.test(file.type+file.name)?"heic":"decode")}
+  const W=src.naturalWidth||src.width,H=src.naturalHeight||src.height,k=Math.min(1,1200/Math.max(W,H)),c=document.createElement("canvas");
+  c.width=Math.max(1,W*k|0);c.height=Math.max(1,H*k|0);
+  try{const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(src,0,0,c.width,c.height);const out=c.toDataURL("image/jpeg",.82);c.width=c.height=0;if(out.length>100)return out}catch(e){}
+  if(data&&file.size<5e6)return data;throw new Error("decode")}
+const PILL_SVG=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7z"/><path d="m8.5 8.5 7 7"/></svg>`;
+const showImg=()=>settings.showImg!==false;
+const thumb=p=>p.photos?.[0]?`<img class="pthumb" data-img="${esc(p.photos[0])}" alt="">`:`<span class="pthumb none">${PILL_SVG}</span>`;
+function photoCard(p){const ph=p.photos||[];
+  return`<div class="card"><h4>写真</h4>${ph.length?`<div class="photos">${ph.map((id,i)=>`<div class="ph-t${i?"":" first"}"><img data-img="${esc(id)}" alt="写真${i+1}" data-phv="${i}">${i?"":"<em>一覧に表示</em>"}<button type="button" data-phx="${i}" aria-label="写真${i+1}を外す">×</button></div>`).join("")}</div><p class="hint" style="margin:8px 0">タップで大きく表示。2枚目以降は、大きく表示した画面から一覧に使う写真にできます。</p>`:`<p class="hint" style="margin:0 0 8px">パッケージの写真などを入れると、商品一覧の左側に表示されます。</p>`}
+  <label class="filebtn">＋ 写真を追加<input type="file" accept="image/*" multiple hidden data-phadd></label></div>`}
+async function addPhotos(pid,files){const p=pById(pid);if(!p)return;const ids=[...(p.photos||[])];let n=0;
+  for(const f of files){try{const d=await compress(f),id="g"+newId();if(await KV.set("img:"+id,d)){imgCache[id]=d;ids.push(id);n++}else toast("写真の保存に失敗しました")}catch(e){toast(e?.message==="heic"?"HEIC形式の写真は読み込めませんでした（スクショで試してください）":"写真を読み込めませんでした")}}
+  if(n){await db.doc("products/"+pid).update({photos:ids,updatedAt:now()});toast(`写真を${n}枚追加しました`)}}
+async function rmPhoto(pid,i){const p=pById(pid);const ids=[...(p?.photos||[])];const [id]=ids.splice(i,1);if(!id)return;await db.doc("products/"+pid).update({photos:ids,updatedAt:now()});await KV.del("img:"+id);delete imgCache[id];toast("写真を外しました")}
+async function firstPhoto(pid,i){const p=pById(pid);const ids=[...(p?.photos||[])];if(!ids[i])return;ids.unshift(...ids.splice(i,1));await db.doc("products/"+pid).update({photos:ids,updatedAt:now()})}
+function viewPhoto(pid,i){const id=pById(pid)?.photos?.[i];if(!id)return;const v=document.createElement("div");v.className="viewer";
+  v.innerHTML=`<img data-img="${esc(id)}" alt=""><div style="position:absolute;left:0;right:0;bottom:calc(20px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;gap:10px">${i?`<button class="btn" data-vfirst>一覧に表示する写真にする</button>`:""}<button class="btn" data-vclose>閉じる</button></div>`;
+  v.onclick=async e=>{if(e.target.closest("[data-vfirst]")){await firstPhoto(pid,i);toast("一覧に表示する写真にしました")}v.remove()};document.body.appendChild(v)}
+sheet.addEventListener("change",e=>{const t=e.target;if(t.matches("[data-phadd]")&&current?.id){const fs=[...t.files];t.value="";addPhotos(current.id,fs)}});
+
+/* ---------- 書き出し・読み込み ---------- */
+async function exportData(){
+  const im={};for(const p of Object.values(store.products))for(const id of p.photos||[]){const d=await getImg(id);if(d)im[id]=d}
+  const json=JSON.stringify({app:"otc-techo",kind:"backup",version:1,appVer:APP_VER,exportedAt:new Date().toISOString(),settings,products:store.products,ingredients:store.ingredients,sales:store.sales,quiz:store.quiz,imgs:im});
+  const name=`otc-techo-${ymd(new Date())}.json`,file=new File([json],name,{type:"application/json"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:"OTC早見手帳 バックアップ"});return}catch(e){if(e.name==="AbortError")return}}
+  const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();toast("書き出しました")}
+const isEmpty=v=>v==null||v===""||(Array.isArray(v)&&!v.length)||(typeof v==="object"&&!Array.isArray(v)&&!Object.keys(v).length);
+const rxEmpty=r=>!r||RX_GROUPS.every(([k])=>!(r[k]||[]).length);
+function fillDoc(old,neu){const o={...old};let ch=0;
+  for(const[k,v]of Object.entries(neu)){if(k==="updatedAt"||k==="createdAt"||k==="verified"||k==="id")continue;
+    if(k==="dosageTable"){if(!(o.dosageTable?.rows||[]).length&&(v?.rows||[]).length){o.dosageTable=v;ch=1}continue}
+    if(k==="restrictions"){if(rxEmpty(o.restrictions)&&!rxEmpty(v)){o.restrictions=v;ch=1}continue}
+    if(isEmpty(o[k])&&!isEmpty(v)){o[k]=v;ch=1}}
+  if(ch)o.updatedAt=now();return ch?o:null}
+async function mergeData(j){
+  const backup=j.kind==="backup";let add=0,upd=0;
+  for(const[k,v]of Object.entries(j.imgs||{}))if(!(await KV.get("img:"+k))&&await KV.set("img:"+k,v))imgCache[k]=v;
+  for(const c of COLS){const src=j[c];if(!src||typeof src!=="object")continue;
+    const ent=Array.isArray(src)?src.map(x=>[x.id||newId(),x]):Object.entries(src);let ch=0;
+    for(const[id0,raw]of ent){if(!raw||typeof raw!=="object")continue;const d={...raw};delete d.id;let id=id0;
+      if(!store[c][id]&&c==="products"&&d.name){const hit=Object.entries(store.products).find(([,p])=>norm(p.name)===norm(d.name));if(hit)id=hit[0]}
+      if(!store[c][id]&&c==="ingredients"&&d.name){const hit=Object.entries(store.ingredients).find(([,x])=>norm(x.name)===norm(d.name));if(hit)id=hit[0]}
+      const old=store[c][id];
+      if(!old){if(c==="products"&&!d.name)continue;store[c][id]=d;add++;ch=1;continue}
+      if(backup){if((d.updatedAt||0)>(old.updatedAt||0)){store[c][id]=d;upd++;ch=1}}
+      else{const m=fillDoc(old,d);if(m){store[c][id]=m;upd++;ch=1}}}
+    if(ch){await persist(c);emit(c)}}
+  if(backup&&j.settings){for(const k of["theme","mode","fs","showImg"])if(j.settings[k]!=null)settings[k]=j.settings[k];applyLook();await saveSettings()}
+  return{add,upd}}
+async function importJSON(text){
+  let j;try{j=JSON.parse(String(text||"").trim())}catch(e){toast("読み込めませんでした（ファイルの形式が違います）");return}
+  if(!j||j.app!=="otc-techo"){toast("このアプリのデータではありません");return}
+  const{add,upd}=await mergeData(j);render();
+  toast(add||upd?`${add}件追加・${upd}件更新しました`:"新しく読み込むデータはありませんでした")}
+async function loadSeed(fresh){const r=await fetch("data.json"+(fresh?"?fresh="+Date.now():""),{cache:fresh?"no-store":"default"});if(!r.ok)throw new Error("http");return r.json()}
+async function seedIfEmpty(){
+  if(Object.keys(store.products).length||settings.seedVer)return;
+  try{const j=await loadSeed(false);for(const c of["products","ingredients"])Object.assign(store[c],j[c]||{});await persist("products");await persist("ingredients");settings.seedVer=j.version||"";await saveSettings()}
+  catch(e){toast("最初のデータを読み込めませんでした。ネットにつながっているときに開き直してください")}}
+async function checkSeed(btn){btn.disabled=true;btn.textContent="確認中…";
+  try{const j=await loadSeed(true);const{add,upd}=await mergeData(j);settings.seedVer=j.version||settings.seedVer;await saveSettings();render();
+    toast(add||upd?`${add}件追加・${upd}件の空欄を埋めました`:"新しいデータはありませんでした")}
+  catch(e){toast("確認できませんでした（ネット接続を確認してください）")}
+  btn.disabled=false;btn.textContent="更新を確認する";renderSettings()}
+
+/* ---------- 起動 ---------- */
+(async()=>{
+  const sa=navigator.standalone||matchMedia("(display-mode: standalone)").matches;
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  if(ios&&!sa)$("#a2hs").hidden=false;
+  if("serviceWorker" in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register("sw.js").catch(()=>{});
+  await testStorage();if(!storeOK)$("#warn").hidden=false;
+  try{navigator.storage?.persist?.()}catch(e){}
+  try{Object.assign(settings,JSON.parse(await KV.get("settings-v1")||"{}"))}catch(e){}
+  applyLook();
+  for(const c of COLS){try{store[c]=JSON.parse(await KV.get("col:"+c)||"{}")||{}}catch(e){store[c]={}}}
+  await seedIfEmpty();
+  $("#sync").textContent="";
+  boot();COLS.forEach(emit);
+})();
+</script>
+</body></html>
