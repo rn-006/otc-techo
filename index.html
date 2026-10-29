@@ -243,7 +243,7 @@ details.ta summary{font-size:13px;color:var(--accent);cursor:pointer;padding:6px
     <div id="learnBody"></div>
   </main>
   <main id="view-sales" hidden>
-    <div class="seg" role="group"><button data-seg2="list">記録</button><button data-seg2="stats">集計</button></div>
+    <div class="seg" role="group"><button data-seg2="list">記録</button><button data-seg2="stats">集計</button><button data-seg2="cust">お客様</button></div>
     <div id="salesBody"></div>
   </main>
   <main id="view-settings" hidden>
@@ -302,7 +302,7 @@ let db=null;
 const LS={get(k,d){try{const v=localStorage.getItem("otc."+k);return v?JSON.parse(v):d}catch(_){return d}},set(k,v){try{localStorage.setItem("otc."+k,JSON.stringify(v))}catch(_){}}};
 const z2=n=>String(n).padStart(2,"0");
 const ymd=d=>`${d.getFullYear()}-${z2(d.getMonth()+1)}-${z2(d.getDate())}`;
-const S={products:[],ings:[],sales:[],quiz:{},tab:"products",q:"",filter:"all",ifilter:"all",loaded:false,
+const S={products:[],ings:[],sales:[],customers:[],cq:"",quiz:{},tab:"products",q:"",filter:"all",ifilter:"all",loaded:false,
   cmp:LS.get("cmp",[]),learn:LS.get("learn","cmp"),qopt:LS.get("qopt",{kind:"mix",scope:"all",verifiedOnly:false}),qz:null,
   review:null,revScope:"all",salesView:"list",month:ymd(new Date()).slice(0,7),statAll:false};
 const TITLES={products:"商品",ings:"成分",learn:"学習",sales:"販売記録",settings:"設定"};
@@ -314,6 +314,7 @@ async function boot(){
   db.collection("products").onSnapshot(s=>{S.products=s.docs.map(d=>({id:d.id,...d.data()}));IX=null;S.loaded=true;render();refreshSheet()});
   db.collection("ingredients").onSnapshot(s=>{S.ings=s.docs.map(d=>({id:d.id,...d.data()}));IX=null;render();refreshSheet()});
   db.collection("sales").onSnapshot(s=>{S.sales=s.docs.map(d=>({id:d.id,...d.data()}));renderSales();refreshSheet()});
+  db.collection("customers").onSnapshot(s=>{S.customers=s.docs.map(d=>({id:d.id,...d.data()}));renderSales();refreshSheet()});
   db.collection("quiz").onSnapshot(s=>{S.quiz=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));if(S.tab==="learn"&&S.learn==="quiz"&&!S.qz)renderLearn()});
 }
 async function saveProduct(p){const {id,...data}=p;data.updatedAt=now();if(id){await db.doc("products/"+id).set(data);return id}data.createdAt=now();const ref=await db.collection("products").add(data);return ref.id}
@@ -369,7 +370,7 @@ let current=null; // {type,id,mode}
 const sheet=$("#sheet");
 function closeSheet(){sheet.hidden=true;sheet.innerHTML="";current=null;S.review=null;document.body.style.overflow=""}
 function showSheet(html){sheet.innerHTML=html;sheet.hidden=false;document.body.style.overflow="hidden"}
-function refreshSheet(){if(!current||current.mode==="edit")return;const st=sheet.scrollTop;if(current.type==="p")openProduct(current.id,true);else if(current.type==="i")openIng(current.id,true);else if(current.type==="pick")S._pickDraw?.();else return;sheet.scrollTop=st}
+function refreshSheet(){if(!current||current.mode==="edit")return;const st=sheet.scrollTop;if(current.type==="p")openProduct(current.id,true);else if(current.type==="i")openIng(current.id,true);else if(current.type==="c")openCustomer(current.id,true);else if(current.type==="pick")S._pickDraw?.();else return;sheet.scrollTop=st}
 function revBar(type,id){const r=S.review;if(!r||r.type!==type||r.ids[r.i]!==id)return"";return`<div class="revbar"><span class="small">確認 ${r.i+1} / ${r.ids.length}</span><span style="flex:1"></span><button class="btn" data-act="revskip">あとで</button><button class="btn pri" data-act="revok">照合済みにして次へ</button></div>`}
 const ul=a=>`<ul>${lines(a).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`;
 function sec(title,body,cls=""){return body?`<div class="card ${cls}"><h4>${title}</h4>${body}</div>`:""}
@@ -494,6 +495,8 @@ sheet.addEventListener("click",async e=>{
   const g=e.target.closest("[data-goi]");if(g){const i=ingByName(g.dataset.goi);if(i)openIng(i.id);else toast("成分辞典にまだありません");return}
   const gt=e.target.closest("[data-goto]");if(gt){openProduct(gt.dataset.goto);return}
   const sv=e.target.closest("[data-sv]");if(sv){const key=sv.dataset.sv.split("|")[0],on=sv.getAttribute("aria-pressed")==="true";sheet.querySelectorAll(`[data-sv^="${key}|"]`).forEach(x=>x.setAttribute("aria-pressed","false"));if(!on)sv.setAttribute("aria-pressed","true");return}
+  const dn=e.target.closest("[data-delnote]");if(dn){if(!dn.dataset.c){dn.dataset.c=1;dn.textContent="もう一度押すと削除";setTimeout(()=>{if(dn.isConnected){delete dn.dataset.c;dn.textContent="削除"}},3000);return}
+    const c=S.customers.find(x=>x.id===current?.id);if(c){db.doc("customers/"+c.id).update({notes:(c.notes||[]).filter(n=>n.id!==dn.dataset.delnote),updatedAt:now()});toast("メモを削除しました")}return}
   const es=e.target.closest("[data-esale]");if(es){editSale(es.dataset.esale,null,current?.id);return}
   const pv=e.target.closest("[data-phv]");if(pv){viewPhoto(current.id,+pv.dataset.phv);return}
   const px=e.target.closest("[data-phx]");if(px){if(!px.dataset.c){px.dataset.c=1;px.textContent="?";toast("もう一度押すと写真を外します");setTimeout(()=>{if(px.isConnected){delete px.dataset.c;px.textContent="×"}},3000);return}rmPhoto(current.id,+px.dataset.phx);return}
@@ -501,7 +504,7 @@ sheet.addEventListener("click",async e=>{
   const b=e.target.closest("[data-act]");if(!b)return;
   const a=b.dataset.act, id=current?.id;
   try{
-  if(a==="close"){const back=current?.from;closeSheet();if(back&&S.products.some(p=>p.id===back))openProduct(back)}
+  if(a==="close"){const back=current?.from;closeSheet();goBack(back)}
   else if(a==="cmpp"){if(S.cmp.includes(id))S.cmp=S.cmp.filter(x=>x!==id);else if(S.cmp.length<4)S.cmp.push(id);else{toast("比べられるのは4商品までです");return}LS.set("cmp",S.cmp);toast(S.cmp.includes(id)?`比較に追加しました（${S.cmp.length}商品）`:"比較から外しました");openProduct(id,true);renderLearn()}
   else if(a==="addsalep")editSale(null,id,id);
   else if(a==="revok"){const r=S.review;await db.doc((r.type==="p"?"products/":"ingredients/")+id).update({verified:true,updatedAt:now()});r.done++;reviewNext()}
@@ -512,13 +515,40 @@ sheet.addEventListener("click",async e=>{
     const old=id?S.sales.find(x=>x.id===id):null;
     const data={date:v("date")||ymd(new Date()),name:p?.name||nm,pid:p?.id||"",category:p?.category||"",qty:Math.max(1,parseInt(v("qty"),10)||1),amount:Math.max(0,parseInt(v("amount"),10)||0),consult:v("consult"),memo:v("smemo"),buy:svGet("buy"),age:svGet("age"),sex:svGet("sex"),createdAt:old?.createdAt||now(),updatedAt:now()};
     b.disabled=true;
+    const cn=v("cust");let cust=null;
+    if(cn){cust=S.customers.find(x=>norm(x.name)===norm(cn));
+      if(!cust){const r=await db.collection("customers").add({name:cn,age:data.age,sex:data.sex,memo:"",notes:[],createdAt:now(),updatedAt:now()});cust={id:r.id,name:cn}}
+      else{const up={};if(!cust.age&&data.age)up.age=data.age;if(!cust.sex&&data.sex)up.sex=data.sex;if(Object.keys(up).length)await db.doc("customers/"+cust.id).update(up)}}
+    data.customerId=cust?.id||"";data.customer=cust?.name||"";
+    if(!data.buy&&cust&&S.sales.some(x=>x.id!==id&&x.customerId===cust.id&&(data.pid?x.pid===data.pid:norm(x.name)===norm(data.name))&&String(x.date)<=data.date))data.buy="継続";
     if(id)await db.doc("sales/"+id).set(data);else await db.collection("sales").add(data);
     const back=current.from;toast("記録しました");closeSheet();
-    if(back&&S.products.some(x=>x.id===back))openProduct(back);else{S.month=data.date.slice(0,7);renderSales()}
+    if(back)goBack(back);else{S.month=data.date.slice(0,7);renderSales()}
   }
   else if(a==="askdels"){$("#delbox").innerHTML=`<div class="confirm"><span style="flex:1">この記録を削除しますか？</span><button class="btn" data-act="canceldels">やめる</button><button class="btn danger" data-act="dels">削除する</button></div>`}
   else if(a==="canceldels"){$("#delbox").innerHTML=`<button class="btn danger" data-act="askdels">この記録を削除</button>`}
-  else if(a==="dels"){const back=current.from;await db.doc("sales/"+id).delete();closeSheet();toast("削除しました");if(back&&S.products.some(x=>x.id===back))openProduct(back)}
+  else if(a==="dels"){const back=current.from;await db.doc("sales/"+id).delete();closeSheet();toast("削除しました");goBack(back)}
+  else if(a==="editc")editCustomer(id);
+  else if(a==="backc")openCustomer(id);
+  else if(a==="addsalec")editSale(null,null,id,id);
+  else if(a==="savec"){
+    const nm=v("cname");if(!nm){toast("呼び名・特徴を入れてください");return}
+    if(S.customers.some(x=>x.id!==id&&norm(x.name)===norm(nm))){toast("同じ呼び名のお客様がすでにいます");return}
+    const old=id?S.customers.find(x=>x.id===id):null;
+    const data={...(old||{notes:[],createdAt:now()}),name:nm,age:svGet("age"),sex:svGet("sex"),memo:v("cmemo"),updatedAt:now()};delete data.id;
+    b.disabled=true;let nid=id;
+    if(id){await db.doc("customers/"+id).set(data);const ss=S.sales.filter(x=>x.customerId===id&&x.customer!==nm);for(const x of ss)await db.doc("sales/"+x.id).update({customer:nm})}
+    else nid=(await db.collection("customers").add(data)).id;
+    toast("保存しました");openCustomer(nid);
+  }
+  else if(a==="addnote"){
+    const t=v("ntext");if(!t){toast("メモを入れてください");return}
+    const c=S.customers.find(x=>x.id===id);if(!c)return;
+    await db.doc("customers/"+id).update({notes:[...(c.notes||[]),{id:newId(),date:v("ndate")||ymd(new Date()),text:t,createdAt:now()}],updatedAt:now()});toast("メモを残しました");
+  }
+  else if(a==="askdelc"){$("#delbox").innerHTML=`<div class="confirm"><span style="flex:1">このお客様とメモを削除しますか？（販売記録は残ります）</span><button class="btn" data-act="canceldelc">やめる</button><button class="btn danger" data-act="delc">削除する</button></div>`}
+  else if(a==="canceldelc")openCustomer(id,true);
+  else if(a==="delc"){await db.doc("customers/"+id).delete();closeSheet();toast("削除しました")}
   else if(a==="edit")editProduct(id);
   else if(a==="back")openProduct(id);
   else if(a==="editi")editIng(id);
@@ -721,11 +751,16 @@ $("#view-learn").addEventListener("change",e=>{const t=e.target;
   LS.set("qopt",S.qopt)});
 
 /* ---------- 販売記録 ---------- */
-function editSale(id,pid,from){
-  const s=id?S.sales.find(x=>x.id===id):{date:ymd(new Date()),qty:1,name:pid?pById(pid)?.name||"":""};if(!s)return;
+function editSale(id,pid,from,cid){
+  const c0=cid?S.customers.find(x=>x.id===cid):null;
+  const s=id?S.sales.find(x=>x.id===id):{date:ymd(new Date()),qty:1,name:pid?pById(pid)?.name||"":"",customer:c0?.name||"",age:c0?.age||"",sex:c0?.sex||""};if(!s)return;
+  const cname=id?(S.customers.find(x=>x.id===s.customerId)?.name||s.customer||""):s.customer;
   current={type:"s",id,mode:"edit",from};
   showSheet(`<div class="bar"><button class="btn ghost" data-act="close">キャンセル</button><span class="t">${id?"販売記録を編集":"販売を記録"}</span><button class="btn pri" data-act="saves">保存</button></div>
   <div class="inner"><div class="form">
+    <label class="fl">お客様（呼び名・特徴／空欄でも可）<input class="f" id="e_cust" list="custlist" value="${esc(cname)}" placeholder="例：眼鏡の60代男性、毎月胃薬の方" autocomplete="off"></label>
+    <datalist id="custlist">${S.customers.slice().sort(byName).map(c=>`<option value="${esc(c.name)}">`).join("")}</datalist>
+    <div id="custPrev" style="margin-top:-6px">${custPrevHtml(cname)}</div>
     <label class="fl">商品<input class="f" id="e_sname" list="salelist" value="${esc(s.name||"")}" placeholder="商品名を入れると候補が出ます" autocomplete="off"></label>
     <datalist id="salelist">${S.products.slice().sort(byName).map(p=>`<option value="${esc(p.name)}">`).join("")}</datalist>
     <div class="two"><label class="fl">日付<input class="f" type="date" id="e_date" value="${esc(s.date||"")}"></label>
@@ -737,8 +772,60 @@ function editSale(id,pid,from){
     <label class="fl">金額（合計・任意）<input class="f" type="number" inputmode="numeric" min="0" id="e_amount" value="${s.amount?esc(s.amount):""}" placeholder="円"></label>
     <label class="fl">相談内容・症状<input class="f" id="e_consult" value="${esc(s.consult||"")}" placeholder="例：のどの痛み、胃もたれ、子ども用の解熱"></label>
     <label class="fl">メモ・ふり返り<textarea id="e_smemo" placeholder="この商品を選んだ理由、比べた商品、次に生かしたいことなど">${esc(s.memo||"")}</textarea></label>
-    <p class="hint" style="margin:0">お客様の氏名など、個人が特定できる情報は書かないでください。</p>
+    <p class="hint" style="margin:0">新規・継続が空のときは、同じお客様が前に同じ商品を買っていれば「継続」になります。</p>
     ${id?`<div id="delbox"><button class="btn danger" data-act="askdels">この記録を削除</button></div>`:""}
+  </div></div>`);
+  sheet.scrollTop=0;
+}
+/* ---------- お客様 ---------- */
+const fmtShort=d=>{const [y,m,dd]=String(d).split("-");return dd?`${y.slice(2)}/${+m}/${+dd}`:String(d||"")};
+function goBack(back){if(!back)return;if(S.products.some(p=>p.id===back))openProduct(back);else if(S.customers.some(c=>c.id===back))openCustomer(back)}
+function custTimeline(c){const ev=[];for(const s of S.sales)if(s.customerId===c.id)ev.push({t:"s",date:s.date,ts:s.createdAt||0,s});for(const n of c.notes||[])ev.push({t:"n",date:n.date,ts:n.createdAt||0,n});return ev.sort((a,b)=>String(b.date).localeCompare(String(a.date))||b.ts-a.ts)}
+function custLast(c){let d="";for(const x of custTimeline(c))if(String(x.date)>d)d=String(x.date);return d}
+function custPrevHtml(name){
+  const c=name&&S.customers.find(x=>norm(x.name)===norm(name));
+  if(!c)return name?`<p class="hint" style="margin:0">新しいお客様として登録されます</p>`:"";
+  const tl=custTimeline(c).slice(0,5);
+  return`<div class="card ask" style="padding:10px 12px"><h4 style="margin-bottom:4px">${esc(c.name)} のこれまで</h4>${c.memo?`<p style="margin-bottom:6px">📌 ${esc(c.memo)}</p>`:""}${tl.length?`<ul>${tl.map(x=>`<li><span class="small">${esc(fmtDate(x.date))}</span> ${x.t==="s"?"🛒 "+esc(x.s.name)+(x.s.consult?"（"+esc(x.s.consult)+"）":""):"💬 "+esc(x.n.text)}</li>`).join("")}</ul>`:`<p class="hint">まだ記録はありません</p>`}</div>`}
+const svSet=(key,val)=>{if(!val||svGet(key))return;const b=sheet.querySelector(`[data-sv="${key}|${val}"]`);if(b)b.setAttribute("aria-pressed","true")};
+sheet.addEventListener("input",e=>{if(e.target.id!=="e_cust")return;const nm=e.target.value.trim();$("#custPrev").innerHTML=custPrevHtml(nm);const c=nm&&S.customers.find(x=>norm(x.name)===norm(nm));if(c){svSet("age",c.age);svSet("sex",c.sex)}});
+function renderCustList(){
+  const el=$("#custList");if(!el)return;const q=norm(S.cq||"");
+  let cs=S.customers.map(c=>({c,last:custLast(c)}));
+  if(q)cs=cs.filter(({c})=>norm([c.name,c.memo,c.age,c.sex,(c.notes||[]).map(n=>n.text).join(" "),S.sales.filter(s=>s.customerId===c.id).map(s=>s.name+" "+(s.consult||"")).join(" ")].join(" ")).includes(q));
+  cs.sort((a,b)=>b.last.localeCompare(a.last)||byName(a.c,b.c));
+  el.innerHTML=!S.customers.length?`<div class="empty"><strong>まだお客様が登録されていません</strong>販売を記録するときに「お客様」欄へ呼び名を入れるか、上のボタンから追加できます。</div>`:!cs.length?`<div class="empty">該当するお客様がいません</div>`
+  :cs.map(({c,last})=>{const n=S.sales.filter(s=>s.customerId===c.id).length,ln=(c.notes||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||(b.createdAt||0)-(a.createdAt||0))[0];
+    return`<button class="row" data-cust="${c.id}" style="grid-template-columns:6px 1fr auto"><span class="band"></span><span class="main"><h3>${esc(c.name)}</h3><span class="meta">${esc([c.age,c.sex,last?"最終 "+fmtDate(last):""].filter(Boolean).join("・"))}</span>${ln?`<div class="ings">💬 ${esc(ln.text)}</div>`:""}</span><span class="side"><span class="flag" style="background:var(--chip)">販売${n}</span>${(c.notes||[]).length?`<span class="small">メモ${c.notes.length}</span>`:""}</span></button>`}).join("")}
+function openCustomer(id,keep){
+  const c=S.customers.find(x=>x.id===id);if(!c){closeSheet();return}
+  const draft=keep?($("#e_ntext")?.value||""):"",ddate=keep?($("#e_ndate")?.value||""):"";
+  current={type:"c",id,mode:"view"};
+  const tl=custTimeline(c),ns=tl.filter(x=>x.t==="s").length,days=new Set(tl.map(x=>x.date)).size,first=tl.length?tl[tl.length-1].date:"";
+  const by={};tl.forEach(x=>(by[x.date]=by[x.date]||[]).push(x));
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="close">‹ 戻る</button><span class="t">${esc(c.name)}</span><button class="btn" data-act="editc">編集</button></div>
+  <div class="inner">
+    <div class="hero"><h2>${esc(c.name)}</h2><div class="meta">${esc([c.age,c.sex].filter(Boolean).join("・"))}</div><div class="hero-acts"><button class="btn" data-act="addsalec">販売を記録</button></div></div>
+    <div class="stat"><div><b>${days}</b><span>対応した日</span></div><div><b>${ns}</b><span>販売</span></div><div><b style="font-size:17px">${first?esc(fmtShort(first)):"—"}</b><span>初回</span></div></div>
+    ${c.memo?sec("いつものメモ",`<p>${esc(c.memo)}</p>`,"ask"):""}
+    <div class="card"><h4>メモを追加</h4><div class="form"><input class="f" type="date" id="e_ndate" value="${esc(ddate||ymd(new Date()))}"><textarea id="e_ntext" placeholder="雑談の内容、体調の変化、次に話したいことなど">${esc(draft)}</textarea><div style="display:flex;justify-content:flex-end"><button class="btn pri" data-act="addnote">メモを残す</button></div></div></div>
+    <div><div class="sh" style="margin-top:4px">これまでの記録（新しい順）</div>${tl.length?Object.entries(by).map(([d,xs])=>`<h5 class="dayh">${esc(fmtDate(d))}</h5><div class="list">${xs.map(x=>x.t==="s"
+      ?`<button class="row" data-esale="${x.s.id}" style="grid-template-columns:6px 1fr auto"><span class="band ${riskCls(pById(x.s.pid)?.risk)}"></span><span class="main"><h3>🛒 ${esc(x.s.name)}</h3><span class="meta">${esc([x.s.buy,x.s.consult].filter(Boolean).join("・"))}</span>${x.s.memo?`<div class="ings">${esc(x.s.memo)}</div>`:""}</span><span class="side"><span class="flag" style="background:var(--chip)">×${esc(x.s.qty)}</span></span></button>`
+      :`<div class="card" style="padding:10px 12px"><p>💬 ${esc(x.n.text)}</p><div style="display:flex;justify-content:flex-end"><button type="button" class="btn ghost danger" data-delnote="${esc(x.n.id)}" style="font-size:12px;padding:2px 6px">削除</button></div></div>`).join("")}</div>`).join(""):`<p class="hint">まだ記録がありません。「メモを追加」か「販売を記録」から残せます。</p>`}</div>
+    <div id="delbox"><button class="btn danger" data-act="askdelc">このお客様を削除</button></div>
+  </div>`);
+  if(!keep)sheet.scrollTop=0;
+}
+function editCustomer(id){
+  const c=id?S.customers.find(x=>x.id===id):{};if(!c)return;
+  current={type:"c",id,mode:"edit"};
+  showSheet(`<div class="bar"><button class="btn ghost" data-act="${id?"backc":"close"}">キャンセル</button><span class="t">${id?"お客様を編集":"お客様を追加"}</span><button class="btn pri" data-act="savec">保存</button></div>
+  <div class="inner"><div class="form">
+    <label class="fl">呼び名・特徴<input class="f" id="e_cname" value="${esc(c.name||"")}" placeholder="例：眼鏡の60代男性、毎月胃薬の方"></label>
+    <div class="fl">年代${svChips("age",AGES,c.age||"")}</div>
+    <div class="fl">性別${svChips("sex",SEXES,c.sex||"")}</div>
+    <label class="fl">いつものメモ（体質・アレルギー・好みなど、毎回見たいこと）<textarea id="e_cmemo">${esc(c.memo||"")}</textarea></label>
+    <p class="hint" style="margin:0">お客様の情報はこのiPhoneの中だけに保存されます。職場のルールの範囲で入力してください。</p>
   </div></div>`);
   sheet.scrollTop=0;
 }
@@ -748,6 +835,7 @@ function renderSales(){
   document.querySelectorAll("#view-sales [data-seg2]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.seg2===S.salesView));
   const el=$("#salesBody");
   if(!S.loaded){el.innerHTML=`<div class="empty" style="margin-top:12px">読み込み中…</div>`;return}
+  if(S.salesView==="cust"){el.innerHTML=`<div class="stack"><button class="btn pri big" data-act3="addcust">＋ お客様を追加</button><div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="cq" type="search" placeholder="呼び名・特徴・メモ・商品で探す" value="${esc(S.cq)}" autocomplete="off"></div><div class="list" id="custList"></div><p class="hint" style="margin:0">お客様の情報はこのiPhoneの中だけに保存されます。職場のルールの範囲で入力してください。</p></div>`;renderCustList();return}
   const [y,m]=S.month.split("-").map(Number);
   const all=S.statAll&&S.salesView==="stats";
   const list=S.sales.filter(s=>all||String(s.date).startsWith(S.month));
@@ -759,7 +847,7 @@ function renderSales(){
   if(!S.sales.length){el.innerHTML=`<div class="stack">${head}<div class="empty"><strong>まだ販売記録がありません</strong>売れた商品・相談内容・選んだ理由を残しておくと、よく出る商品や自分の提案のくせが見えてきます。</div></div>`;return}
   if(S.salesView==="list"){
     const by={};list.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||(b.createdAt||0)-(a.createdAt||0)).forEach(s=>(by[s.date]=by[s.date]||[]).push(s));
-    el.innerHTML=`<div class="stack">${head}${list.length?Object.entries(by).map(([d,ss])=>`<div><h5 class="dayh">${esc(fmtDate(d))}</h5><div class="list">${ss.map(s=>{const p=pById(s.pid);return`<button class="row" data-sale="${s.id}"><span class="band ${riskCls(p?.risk)}"></span><span class="main"><h3>${esc(s.name)}</h3><span class="meta">${esc([s.buy,s.age,s.sex,s.consult,s.memo&&"メモあり"].filter(Boolean).join("・"))}</span></span><span class="side"><span class="flag" style="background:var(--chip)">×${esc(s.qty)}</span>${s.amount?`<span class="small">¥${(+s.amount).toLocaleString()}</span>`:""}</span></button>`}).join("")}</div></div>`).join(""):`<div class="empty">この月の記録はありません</div>`}</div>`;
+    el.innerHTML=`<div class="stack">${head}${list.length?Object.entries(by).map(([d,ss])=>`<div><h5 class="dayh">${esc(fmtDate(d))}</h5><div class="list">${ss.map(s=>{const p=pById(s.pid);return`<button class="row" data-sale="${s.id}"><span class="band ${riskCls(p?.risk)}"></span><span class="main"><h3>${esc(s.name)}</h3><span class="meta">${esc([s.customer&&"👤"+s.customer,s.buy,s.age,s.sex,s.consult,s.memo&&"メモあり"].filter(Boolean).join("・"))}</span></span><span class="side"><span class="flag" style="background:var(--chip)">×${esc(s.qty)}</span>${s.amount?`<span class="small">¥${(+s.amount).toLocaleString()}</span>`:""}</span></button>`}).join("")}</div></div>`).join(""):`<div class="empty">この月の記録はありません</div>`}</div>`;
   }else{
     const agg=(keyf)=>{const m=new Map();for(const s of list){const k=keyf(s)||"（未分類）";m.set(k,(m.get(k)||0)+(+s.qty||0))}return[...m.entries()].sort((a,b)=>b[1]-a[1])};
     const bars=(arr,max)=>arr.map(([k,n])=>`<div class="hbar"><span class="lab">${esc(k)}</span><span><i style="width:${n/max*100}%"></i></span><span class="n">${n}</span></div>`).join("");
@@ -780,11 +868,13 @@ $("#view-sales").addEventListener("click",e=>{
   const mo=e.target.closest("[data-mon]");if(mo){shiftMonth(+mo.dataset.mon);return}
   const sa=e.target.closest("[data-statall]");if(sa){S.statAll=sa.dataset.statall==="1";renderSales();return}
   const r=e.target.closest("[data-sale]");if(r){editSale(r.dataset.sale);return}
-  const b=e.target.closest("[data-act3]");if(b){if(!db){toast("保存先に接続できません");return}editSale(null)}
+  const cu=e.target.closest("[data-cust]");if(cu){openCustomer(cu.dataset.cust);return}
+  const b=e.target.closest("[data-act3]");if(b){if(b.dataset.act3==="addcust")editCustomer(null);else editSale(null)}
 });
+$("#view-sales").addEventListener("input",e=>{if(e.target.id==="cq"){S.cq=e.target.value;renderCustList()}});
 
 /* ---------- 端末内の保存（IndexedDB） ---------- */
-const APP_VER="2026.10.29b";
+const APP_VER="2026.10.29c";
 const IDB=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open("otc-techo",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
   const tx=async(mode,fn)=>{const d=await open();return new Promise((res,rej)=>{const t=d.transaction("kv",mode),r=fn(t.objectStore("kv"));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})};
   return{get:k=>tx("readonly",s=>s.get(k)),set:(k,v)=>tx("readwrite",s=>s.put(v,k)),del:k=>tx("readwrite",s=>s.delete(k))}})();
@@ -794,8 +884,8 @@ const KV={
   async get(k){if(!storeOK)return mem[k]??null;try{return(await IDB.get(k))??null}catch(e){return null}},
   async set(k,v){if(!storeOK){mem[k]=v;return true}try{await IDB.set(k,v);return true}catch(e){console.error(e);return false}},
   async del(k){if(!storeOK){delete mem[k];return}try{await IDB.del(k)}catch(e){}}};
-const COLS=["products","ingredients","sales","quiz"];
-const store={products:{},ingredients:{},sales:{},quiz:{}},subs={};
+const COLS=["products","ingredients","sales","quiz","customers"];
+const store={products:{},ingredients:{},sales:{},quiz:{},customers:{}},subs={};
 const snap=c=>({docs:Object.entries(store[c]).map(([id,d])=>({id,data:()=>d}))});
 const emit=c=>(subs[c]||[]).forEach(cb=>cb(snap(c)));
 async function persist(c){if(!await KV.set("col:"+c,JSON.stringify(store[c])))toast("保存に失敗しました")}
@@ -837,7 +927,7 @@ function renderEnv(){
   const sa=navigator.standalone||matchMedia("(display-mode: standalone)").matches;
   const nph=Object.values(store.products).reduce((a,p)=>a+(p.photos||[]).length,0);
   const rows=[["データの保存",storeOK?'<b class="ok">できます</b>':'<b class="ng">できません</b>'],["開き方",sa?"ホーム画面のアプリ":"ブラウザ"],["開いている場所",esc((location.protocol||"")+"//"+(location.host||"（ファイル）"))],["ネット接続",navigator.onLine?"あり":"なし"],
-    ["商品・成分",`${Object.keys(store.products).length}件・${Object.keys(store.ingredients).length}成分`],["写真",nph+"枚"],["販売記録",Object.keys(store.sales).length+"件"],
+    ["商品・成分",`${Object.keys(store.products).length}件・${Object.keys(store.ingredients).length}成分`],["写真",nph+"枚"],["販売記録",Object.keys(store.sales).length+"件"],["お客様",Object.keys(store.customers).length+"人"],
     ["オフライン対応",navigator.serviceWorker?.controller?'<b class="ok">有効</b>':"なし"],["アプリのバージョン",APP_VER],["収録データ",settings.seedVer||"—"]];
   $("#envBox").innerHTML=rows.map(([a,b])=>`<div class="envrow"><span>${a}</span><span>${b}</span></div>`).join("")+(storeOK?"":`<p class="hint" style="color:var(--bad)">この開き方ではデータが保存されません。Safariで開いて「ホーム画面に追加」したアイコンから使ってください。</p>`);
 }
@@ -892,7 +982,7 @@ sheet.addEventListener("change",e=>{const t=e.target;if(t.matches("[data-phadd]"
 /* ---------- 書き出し・読み込み ---------- */
 async function exportData(){
   const im={};for(const p of Object.values(store.products))for(const id of p.photos||[]){const d=await getImg(id);if(d)im[id]=d}
-  const json=JSON.stringify({app:"otc-techo",kind:"backup",version:1,appVer:APP_VER,exportedAt:new Date().toISOString(),settings,products:store.products,ingredients:store.ingredients,sales:store.sales,quiz:store.quiz,imgs:im});
+  const json=JSON.stringify({app:"otc-techo",kind:"backup",version:1,appVer:APP_VER,exportedAt:new Date().toISOString(),settings,products:store.products,ingredients:store.ingredients,sales:store.sales,quiz:store.quiz,customers:store.customers,imgs:im});
   const name=`otc-techo-${ymd(new Date())}.json`,file=new File([json],name,{type:"application/json"});
   if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:"OTC早見手帳 バックアップ"});return}catch(e){if(e.name==="AbortError")return}}
   const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();toast("書き出しました")}
