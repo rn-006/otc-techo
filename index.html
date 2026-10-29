@@ -231,7 +231,7 @@ details.ta summary{font-size:13px;color:var(--accent);cursor:pointer;padding:6px
     <h2 class="page" id="ptitle">商品</h2>
     <div class="search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="商品名・成分・症状（例：頭痛、眠くなる）" autocomplete="off">
+      <input id="q" type="search" placeholder="商品名・成分・症状・JANコード" autocomplete="off">
     </div>
     <div class="chips" id="filters"></div>
   </header>
@@ -330,23 +330,34 @@ const ingByName=n=>ix().byName.get(norm(n));
 const productsWith=n=>{const i=ingByName(n);return[...(ix().prodBy.get(i?i.id:"n:"+norm(n))||[])]};
 
 /* ---------- list views ---------- */
-function hay(p){return norm([p.name,p.maker,p.category,p.risk,(p.tags||[]).join(" "),(p.ingredients||[]).map(i=>i.name+" "+(i.role||"")).join(" "),lines(p.effects).join(" "),RX_GROUPS.map(([k])=>(p.restrictions?.[k]||[]).map(x=>x.text).join(" ")).join(" "),(p.checkPoints||[]).join(" "),lines(p.sideEffects?.map?.(s=>s.symptom)||[]).join(" "),p.memo].join(" "))}
+const isListOnly=p=>!(p.ingredients||[]).length&&!lines(p.effects).length;
+const yen=n=>n||n===0?"¥"+Number(n).toLocaleString():"";
+const catTop=c=>String(c||"").split(/[（(]/)[0].trim();
+const hasEnd=p=>(p.skus||[]).some(x=>x.status);
+function priceLabel(p){const ps=(p.skus||[]).map(x=>x.price).filter(x=>x||x===0);if(!ps.length)return"";const a=Math.min(...ps),b=Math.max(...ps);return a===b?yen(a):yen(a)+"〜"}
+function skuCard(p){const ks=p.skus||[];if(!ks.length)return"";
+  return`<div class="card"><h4>店頭の商品${p.selfMed?` <span class="flag done" style="letter-spacing:0">★ セルフメディケーション税制対象</span>`:""}</h4><table class="tbl"><tr><th>内容量</th><th>売価（税込）</th><th>JANコード</th></tr>${ks.map(x=>`<tr><td>${esc(x.size||"—")}${x.status?`<br><span class="flag todo">${esc(x.status)}</span>`:""}</td><td style="font-weight:700;white-space:nowrap">${esc(yen(x.price)||"—")}${x.tax?`<br><span class="small">税率${esc(x.tax)}%</span>`:""}</td><td class="amt">${esc(x.jan||"—")}</td></tr>${x.note?`<tr><td colspan="3" class="small" style="border-top:0;padding-top:0">特記：${esc(x.note)}</td></tr>`:""}`).join("")}</table></div>`}
+function hay(p){return norm([p.name,(p.skus||[]).map(x=>[x.size,x.jan,x.note,x.status].join(" ")).join(" "),p.selfMed?"セルフメディケーション セルメ ★":"",p.maker,p.category,p.risk,(p.tags||[]).join(" "),(p.ingredients||[]).map(i=>i.name+" "+(i.role||"")).join(" "),lines(p.effects).join(" "),RX_GROUPS.map(([k])=>(p.restrictions?.[k]||[]).map(x=>x.text).join(" ")).join(" "),(p.checkPoints||[]).join(" "),lines(p.sideEffects?.map?.(s=>s.symptom)||[]).join(" "),p.memo].join(" "))}
 function render(){
   const q=norm(S.q);
   // filters
   const f=$("#filters");
   if(S.tab==="products"){
-    const cats=[...new Set(S.products.map(p=>p.category).filter(Boolean))].sort();
-    const opts=[["all","すべて"],...RISKS.map(([r,c])=>["risk:"+c,riskShort(r)]),["todo","未確認"],...cats.map(c=>["cat:"+c,c])];
+    const cats=[...new Set(S.products.map(p=>catTop(p.category)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
+    const opts=[["all","すべて"],...RISKS.map(([r,c])=>["risk:"+c,riskShort(r)]),["doc","添付文書あり"],["list","一覧のみ"],["self","★セルメ対象"],["end","在庫限り"],["todo","未確認"],...cats.map(c=>["cat:"+c,c])];
     f.innerHTML=opts.map(([k,l])=>`<button class="chip" data-f="${esc(k)}" aria-pressed="${S.filter===k}">${esc(l)}</button>`).join("");
     f.hidden=false;
     let ps=S.products.slice().sort((a,b)=>String(a.name).localeCompare(b.name,"ja"));
     if(S.filter.startsWith("risk:"))ps=ps.filter(p=>riskCls(p.risk)===S.filter.slice(5));
-    else if(S.filter==="todo")ps=ps.filter(p=>!p.verified);
-    else if(S.filter.startsWith("cat:"))ps=ps.filter(p=>p.category===S.filter.slice(4));
+    else if(S.filter==="todo")ps=ps.filter(p=>!p.verified&&!isListOnly(p));
+    else if(S.filter==="doc")ps=ps.filter(p=>!isListOnly(p));
+    else if(S.filter==="list")ps=ps.filter(isListOnly);
+    else if(S.filter==="self")ps=ps.filter(p=>p.selfMed);
+    else if(S.filter==="end")ps=ps.filter(hasEnd);
+    else if(S.filter.startsWith("cat:"))ps=ps.filter(p=>catTop(p.category)===S.filter.slice(4));
     if(q)ps=ps.filter(p=>hay(p).includes(q));
     $("#pcount").textContent=S.loaded?`${ps.length}件${S.products.length!==ps.length?` ／ 全${S.products.length}件`:""}`:"";
-    $("#plist").innerHTML=!S.loaded?`<div class="empty">読み込み中…</div>`:!S.products.length?`<div class="empty"><strong>まだ商品がありません</strong>下の「取り込み」から添付文書のPDFを選ぶと、成分・効能・副作用に分けてここに並びます。</div>`:!ps.length?`<div class="empty">該当する商品がありません</div>`:ps.map(p=>{const c=riskCls(p.risk);return`<button class="row${showImg()?" ph":""}" data-p="${p.id}"><span class="band ${c}"></span>${showImg()?thumb(p):""}<span class="main"><h3>${esc(p.name||"名称未設定")}</h3><span class="meta">${esc([p.category,p.maker].filter(Boolean).join("・"))}</span><div class="ings">${esc((p.ingredients||[]).map(i=>i.name).join("、"))}</div></span><span class="side"><span class="risk ${c}">${esc(riskShort(p.risk))}</span>${p.verified?"":`<span class="flag todo">未確認</span>`}</span></button>`}).join("");
+    $("#plist").innerHTML=!S.loaded?`<div class="empty">読み込み中…</div>`:!S.products.length?`<div class="empty"><strong>まだ商品がありません</strong>下の「取り込み」から添付文書のPDFを選ぶと、成分・効能・副作用に分けてここに並びます。</div>`:!ps.length?`<div class="empty">該当する商品がありません</div>`:ps.map(p=>{const c=riskCls(p.risk);return`<button class="row${showImg()?" ph":""}" data-p="${p.id}"><span class="band ${c}"></span>${showImg()?thumb(p):""}<span class="main"><h3>${esc(p.name||"名称未設定")}</h3><span class="meta">${esc([p.category,p.maker].filter(Boolean).join("・"))}</span><div class="ings">${esc(isListOnly(p)?(p.skus||[]).map(x=>[x.size,yen(x.price)].filter(Boolean).join(" ")).join("／"):(p.ingredients||[]).map(i=>i.name).join("、"))}</div></span><span class="side"><span class="risk ${c}">${esc(riskShort(p.risk))}</span>${isListOnly(p)?`<span class="flag" style="background:var(--chip)">一覧のみ</span>`:p.verified?"":`<span class="flag todo">未確認</span>`}${p.selfMed?`<span class="small">★セルメ</span>`:""}${hasEnd(p)?`<span class="flag todo">在庫限り</span>`:""}${priceLabel(p)?`<span class="small" style="font-weight:700;color:var(--ink)">${esc(priceLabel(p))}</span>`:""}</span></button>`}).join("");
   }else if(S.tab==="ings"){
     const classes=[...new Set(S.ings.map(i=>i.class).filter(Boolean))].sort();
     f.innerHTML=[["all","すべて"],...classes.map(c=>["cls:"+c,c])].map(([k,l])=>`<button class="chip" data-f="${esc(k)}" aria-pressed="${S.ifilter===k}">${esc(l)}</button>`).join("");f.hidden=false;
@@ -398,7 +409,9 @@ function openProduct(id,keep){
   <div class="inner">
     <div class="hero"><span class="risk ${c}">${esc(p.risk||"区分未設定")}</span><h2>${esc(p.name||"名称未設定")}</h2><div class="meta">${esc([p.category,p.maker].filter(Boolean).join("・"))}</div>
       <div class="hero-acts"><button class="btn" data-act="cmpp">${S.cmp.includes(p.id)?"比較から外す":"＋ 比較に追加"}</button><button class="btn" data-act="addsalep">販売を記録</button></div></div>
-    <div class="verify ${p.verified?"done":"todo"}"><span>${p.verified?"添付文書と照合済み":"AIの読み取り結果です。原本と照らし合わせてください"}</span>${revBar("p",p.id)?"":`<button class="btn" data-act="verify">${p.verified?"未確認に戻す":"照合済みにする"}</button>`}</div>
+    ${skuCard(p)}
+    ${isListOnly(p)?`<div class="verify done" style="background:var(--chip);color:var(--sub)"><span>商品一覧から登録した商品です。添付文書のPDFをClaudeに送ると、成分・用法・注意事項を追加できます。</span></div>`:""}
+    <div class="verify ${p.verified?"done":"todo"}"${isListOnly(p)?" hidden":""}><span>${p.verified?"添付文書と照合済み":"AIの読み取り結果です。原本と照らし合わせてください"}</span>${revBar("p",p.id)?"":`<button class="btn" data-act="verify">${p.verified?"未確認に戻す":"照合済みにする"}</button>`}</div>
     ${photoCard(p)}
     ${sec("効能・効果",lines(p.effects).length?`<p>${esc(lines(p.effects).join("\n"))}</p>`:"")}
     ${(p.checkPoints||[]).length?`<div class="card"><h4>確認ポイント</h4><div class="points">${p.checkPoints.map(x=>`<span>${esc(x)}</span>`).join("")}</div></div>`:""}
@@ -446,6 +459,7 @@ function textToDoseRows(t){return lines(t).map(l=>{const [age,dose,times]=l.spli
 const RX_KEY={"年齢":"age","併用薬":"drugs","併用":"drugs","持病":"conditions","持病・体質":"conditions","体質":"conditions","アレルギー":"conditions","妊娠":"pregnancy","授乳":"pregnancy","妊娠・授乳":"pregnancy","その他":"other"};
 function rxText(r){if(!r)return"";return RX_GROUPS.flatMap(([k,l])=>(r[k]||[]).map(x=>`${({age:"年齢",drugs:"併用薬",conditions:"持病",pregnancy:"妊娠",other:"その他"})[k]} | ${x.level==="不可"?"不可":"相談"} | ${x.text}`)).join("\n")}
 function textToRx(t){const r={age:[],drugs:[],conditions:[],pregnancy:[],other:[]};for(const l of lines(t)){const p=l.split("|").map(s=>s.trim());let k="other",lv="相談",text=l;if(p.length>=3){k=RX_KEY[p[0]]||Object.entries(RX_KEY).find(([a])=>p[0].includes(a))?.[1]||"other";lv=p[1].includes("不可")?"不可":"相談";text=p.slice(2).join(" | ")}else if(p.length===2){lv=p[0].includes("不可")?"不可":"相談";text=p[1]}if(text)r[k].push({text,level:lv})}return r}
+function textToSkus(t,old){const prev=old||[];return lines(t).map((l,i)=>{const [size,price,jan,note]=l.split("|").map(x=>(x||"").trim());const n=parseInt(String(price).replace(/[^\d]/g,""),10);const o=prev.find(x=>x.jan&&x.jan===jan)||prev.find(x=>x.size===size)||prev[i]||{};return{...o,size:size||"",price:isNaN(n)?null:n,jan:(jan||"").replace(/\D/g,""),note:note||""}}).filter(x=>x.size||x.jan||x.price!=null)}
 function editProduct(id){
   const p=id?S.products.find(x=>x.id===id):{verified:true};
   current={type:"p",id,mode:"edit"};
@@ -459,6 +473,8 @@ function editProduct(id){
     <label class="fl">タグ（読点区切り）<input class="f" id="e_tags" value="${esc((p.tags||[]).join("、"))}"></label></div>
     <datalist id="catlist">${[...new Set(S.products.map(x=>x.category).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
     ${ta("ingredients","成分（1行に「成分名 | 分量 | 役割」）",ingToText(p.ingredients),"例：イブプロフェン | 150mg | 解熱鎮痛")}
+    ${ta("skus","店頭の商品（1行に「内容量 | 売価 | JANコード | 特記」）",(p.skus||[]).map(x=>[x.size,x.price??"",x.jan,x.note].map(y=>y??"").join(" | ")).join("\n"),"例：12錠 | 698 | 4987107610867 | ")}
+    <label class="chk"><input type="checkbox" id="e_selfMed" ${p.selfMed?"checked":""}> セルフメディケーション税制の対象</label>
     <label class="fl">成分量の基準<input class="f" id="e_basis" value="${esc(p.ingredientsBasis||"")}" placeholder="3錠中 など"></label>
     ${ta("checkPoints","接客で確認すること（1行に1つ）",(p.checkPoints||[]).join("\n"))}
     ${ta("effects","効能・効果",lines(p.effects).join("\n"))}
@@ -519,6 +535,7 @@ sheet.addEventListener("click",async e=>{
     if(cn){cust=S.customers.find(x=>norm(x.name)===norm(cn));
       if(!cust){const r=await db.collection("customers").add({name:cn,age:data.age,sex:data.sex,memo:"",notes:[],createdAt:now(),updatedAt:now()});cust={id:r.id,name:cn}}
       else{const up={};if(!cust.age&&data.age)up.age=data.age;if(!cust.sex&&data.sex)up.sex=data.sex;if(Object.keys(up).length)await db.doc("customers/"+cust.id).update(up)}}
+    if(!data.amount&&p&&(p.skus||[]).length===1&&p.skus[0].price)data.amount=p.skus[0].price*data.qty;
     data.customerId=cust?.id||"";data.customer=cust?.name||"";
     if(!data.buy&&cust&&S.sales.some(x=>x.id!==id&&x.customerId===cust.id&&(data.pid?x.pid===data.pid:norm(x.name)===norm(data.name))&&String(x.date)<=data.date))data.buy="継続";
     if(id)await db.doc("sales/"+id).set(data);else await db.collection("sales").add(data);
@@ -564,7 +581,7 @@ sheet.addEventListener("click",async e=>{
   else if(a==="savep"){
     if(!v("name")){toast("商品名を入れてください");return}
     const old=id?S.products.find(x=>x.id===id):{verified:true};
-    const p={...old,id,name:v("name"),maker:v("maker"),risk:v("risk"),category:v("category"),tags:split(v("tags")),ingredients:textToIng(v("ingredients")),ingredientsBasis:v("basis"),checkPoints:lines(v("checkPoints")),effects:lines(v("effects")),dosage:v("dosage"),dosageTable:{rows:textToDoseRows(v("doseRows")),timing:v("timing"),interval:v("interval"),maxPerDay:v("maxPerDay"),duration:v("duration"),notes:lines(v("doseNotes"))},restrictions:textToRx(v("rx")),donts:lines(v("donts")),consult:lines(v("consult")),sideEffects:textToSe(v("sideEffects")),serious:lines(v("serious")),otherNotes:lines(v("otherNotes"))};
+    const p={...old,id,name:v("name"),maker:v("maker"),risk:v("risk"),category:v("category"),tags:split(v("tags")),ingredients:textToIng(v("ingredients")),ingredientsBasis:v("basis"),skus:textToSkus(v("skus"),old.skus),selfMed:!!$("#e_selfMed")?.checked,checkPoints:lines(v("checkPoints")),effects:lines(v("effects")),dosage:v("dosage"),dosageTable:{rows:textToDoseRows(v("doseRows")),timing:v("timing"),interval:v("interval"),maxPerDay:v("maxPerDay"),duration:v("duration"),notes:lines(v("doseNotes"))},restrictions:textToRx(v("rx")),donts:lines(v("donts")),consult:lines(v("consult")),sideEffects:textToSe(v("sideEffects")),serious:lines(v("serious")),otherNotes:lines(v("otherNotes"))};
     b.disabled=true;const nid=await saveProduct(p);current={type:"p",id:nid,mode:"view"};toast("保存しました");
     setTimeout(()=>openProduct(nid),150);
   }
@@ -616,6 +633,7 @@ function cmpHtml(){
   <div class="cmpwrap"><table class="cmp"><thead><tr><th></th>${ps.map(p=>`<th>${p.photos?.[0]?`<img class="cmp-ph" data-img="${esc(p.photos[0])}" alt="">`:""}<button class="ingbtn" data-openp="${p.id}">${esc(p.name)}</button></th>`).join("")}</tr></thead><tbody>
   ${row("区分",p=>`<span class="risk ${riskCls(p.risk)}">${esc(riskShort(p.risk))}</span>`)}
   ${row("分類",p=>esc(p.category||"—"))}
+  ${row("売価",p=>(p.skus||[]).length?`<ul>${p.skus.map(x=>`<li>${esc(x.size||"")} <b>${esc(yen(x.price)||"—")}</b></li>`).join("")}</ul>`:`<span class="small">—</span>`)}
   ${row("成分",p=>(p.ingredients||[]).length?`<ul>${p.ingredients.map(i=>`<li>${cnt[ingKey(i.name)]>1?`<mark class="same">${esc(i.name)}</mark>`:esc(i.name)} <span class="small">${esc(i.amount||"")}</span></li>`).join("")}</ul>${p.ingredientsBasis?`<div class="small" style="margin-top:4px">${esc(p.ingredientsBasis)}</div>`:""}`:none)}
   ${row("効能・効果",p=>lines(p.effects).length?`<ul>${lines(p.effects).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:none)}
   ${row("用法・用量",p=>{const r=p.dosageTable?.rows||[];return r.length?`<ul>${r.map(x=>`<li${x.ng?` style="color:var(--bad)"`:""}>${esc(x.age)}：${x.ng?"服用しない":esc([x.dose,x.times].filter(Boolean).join("・"))}</li>`).join("")}</ul>${p.dosageTable.timing?`<div class="small" style="margin-top:4px">${esc(p.dosageTable.timing)}</div>`:""}`:p.dosage?esc(p.dosage):none})}
@@ -698,15 +716,16 @@ function quizHtml(){
 
 /* 確認作業 */
 function checkHtml(){
-  const pt=S.products.length,pv=S.products.filter(p=>p.verified).length,it=S.ings.length,iv=S.ings.filter(i=>i.verified).length;
+  const PD=S.products.filter(p=>!isListOnly(p));
+  const pt=PD.length,pv=PD.filter(p=>p.verified).length,it=S.ings.length,iv=S.ings.filter(i=>i.verified).length;
   const pct=(a,b)=>b?Math.round(a/b*100):0;
-  const scopeLeft=S.products.filter(p=>!p.verified&&(S.revScope==="all"||p.category===S.revScope)).length;
+  const scopeLeft=PD.filter(p=>!p.verified&&(S.revScope==="all"||p.category===S.revScope)).length;
   const need=S.products.filter(p=>!p.verified&&lines(p.otherNotes).some(x=>x.includes("要確認"))).sort(byName);
-  const unorg=S.products.filter(p=>!(p.dosageTable?.rows||[]).length||!p.restrictions).sort(byName);
+  const unorg=PD.filter(p=>!(p.dosageTable?.rows||[]).length||!p.restrictions).sort(byName);
   const rows=ps=>`<div class="list">${ps.map(p=>`<button class="row" data-openp="${p.id}"><span class="band ${riskCls(p.risk)}"></span><span class="main"><h3>${esc(p.name)}</h3><span class="meta">${esc(p.category||"")}</span></span><span class="side">${p.verified?`<span class="flag done">照合済み</span>`:`<span class="flag todo">未確認</span>`}</span></button>`).join("")}</div>`;
   return`<div class="stack">
   <div class="card"><h4>商品の照合</h4><div><span class="big-num">${pv}</span> <span class="small">/ ${pt}件（${pct(pv,pt)}%）</span></div><div class="meter" style="margin:8px 0 12px"><i style="width:${pct(pv,pt)}%"></i></div>
-    <div class="form"><label class="fl">確認する範囲<select class="f" id="revscope"><option value="all">すべての分類</option>${catList().map(c=>`<option ${S.revScope===c?"selected":""}>${esc(c)}</option>`).join("")}</select></label>
+    <div class="form"><label class="fl">確認する範囲<select class="f" id="revscope"><option value="all">すべての分類</option>${[...new Set(PD.map(p=>p.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja")).map(c=>`<option ${S.revScope===c?"selected":""}>${esc(c)}</option>`).join("")}</select></label>
     <button class="btn pri big" data-act2="revp" ${scopeLeft?"":"disabled"}>${scopeLeft?`未確認の商品を順に確認する（${scopeLeft}件）`:"この範囲はすべて照合済みです"}</button></div></div>
   <div class="card"><h4>成分辞典の確認</h4><div><span class="big-num">${iv}</span> <span class="small">/ ${it}成分（${pct(iv,it)}%）</span></div><div class="meter" style="margin:8px 0 12px"><i style="width:${pct(iv,it)}%"></i></div>
     <button class="btn big" data-act2="revi" ${iv<it?"":"disabled"}>${iv<it?`未確認の成分を順に確認する（${it-iv}件）`:"すべて確認済みです"}</button></div>
@@ -716,7 +735,7 @@ function checkHtml(){
   </div>`;
 }
 function startReview(type){
-  const ids=type==="p"?S.products.filter(p=>!p.verified&&(S.revScope==="all"||p.category===S.revScope)).sort((a,b)=>String(a.category||"").localeCompare(b.category||"","ja")||byName(a,b)).map(p=>p.id)
+  const ids=type==="p"?S.products.filter(p=>!isListOnly(p)&&!p.verified&&(S.revScope==="all"||p.category===S.revScope)).sort((a,b)=>String(a.category||"").localeCompare(b.category||"","ja")||byName(a,b)).map(p=>p.id)
     :S.ings.filter(i=>!i.verified).sort((a,b)=>String(a.class||"").localeCompare(b.class||"","ja")||byName(a,b)).map(i=>i.id);
   if(!ids.length){toast("未確認はありません");return}
   S.review={type,ids,i:0,done:0};type==="p"?openProduct(ids[0]):openIng(ids[0]);
@@ -874,7 +893,7 @@ $("#view-sales").addEventListener("click",e=>{
 $("#view-sales").addEventListener("input",e=>{if(e.target.id==="cq"){S.cq=e.target.value;renderCustList()}});
 
 /* ---------- 端末内の保存（IndexedDB） ---------- */
-const APP_VER="2026.10.29c";
+const APP_VER="2026.10.29d";
 const IDB=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open("otc-techo",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
   const tx=async(mode,fn)=>{const d=await open();return new Promise((res,rej)=>{const t=d.transaction("kv",mode),r=fn(t.objectStore("kv"));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})};
   return{get:k=>tx("readonly",s=>s.get(k)),set:(k,v)=>tx("readwrite",s=>s.put(v,k)),del:k=>tx("readwrite",s=>s.delete(k))}})();
